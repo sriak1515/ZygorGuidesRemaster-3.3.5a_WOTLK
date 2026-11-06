@@ -1,5 +1,7 @@
 # Vertical parchment playable prototype
 
+Current product requirements and next-session status are in [PRODUCT_BRIEF_AND_HANDOFF.md](PRODUCT_BRIEF_AND_HANDOFF.md). This document records the implemented prototype and its checkpoint history; the old split layout is under review against those newer requirements.
+
 Implemented on branch `prototype/vertical-parchment`, based on addon **3.0.255**, revision 255, commit `d2aae8d0f1f3782d964e4179907b215aab484787` (27 October 2026). This is a prototype build of that revision; it does not claim to be a new upstream release.
 
 The latest pass compacts Actions and gives inline prose the reading typography, while keeping the C frame and explicit reading controls. Older checkpoint notes below describe the progression of the prototype; the controls and change summary here describe the current build. No campaign text, guide format, or authoring style has been changed.
