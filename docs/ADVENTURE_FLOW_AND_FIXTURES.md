@@ -1,7 +1,11 @@
-# Agreed adventure flow and fixture specification
+# Synthetic adventure flow and fixture proposal — superseded review example
 
-Accepted by the owner on 6 November 2026 after reviewing PRODUCT_BRIEF_AND_HANDOFF.md.
-This records the next behavior contract. It does not implement a reader, history,
+Drafted on 6 November 2026 after reviewing PRODUCT_BRIEF_AND_HANDOFF.md.
+The initial acknowledgment was recorded too strongly as approval. Subsequent
+conversation clarified that reader and continuity behavior remain proposals.
+Use [the Ban’ethil storyboard](BANETHIL_STORYBOARD.md) as the current review
+reference. The synthetic example below is retained as design history, not a
+settled implementation contract. It does not implement a reader, history,
 event model, parser syntax, or font integration.
 
 ## Main guide contract
@@ -89,10 +93,10 @@ it advances quickly?
 
 | Item | State | Next evidence |
 |---|---|---|
-| Experience contract | Agreed | Implement the walkthrough against this document |
-| Separate Zygor reader | Agreed prototype direction; unimplemented | Open/close and progression case |
-| Recent story | Agreed prototype direction; unimplemented | Fast progression/reload, deduplication, future browsing |
-| Event-gated aftermath | Agreed; unimplemented for this walkthrough | Collection vs turn-in case |
+| Experience contract | Draft proposal | Implement the walkthrough against this document |
+| Separate Zygor reader | Proposed; unimplemented | Open/close and progression case |
+| Recent story | Proposed; unimplemented | Fast progression/reload, deduplication, future browsing |
+| Event-gated aftermath | Proposed; unimplemented for this walkthrough | Collection vs turn-in case |
 | Adventure fixtures | Specified; unimplemented | Deterministic state and transition checks |
 | Existing technical cases | Retain | Regression checks appropriate to implementation changes |
 | Normal font controls | Next implementation pass | Primary/secondary controls plus reading-size setting and preference migration |
