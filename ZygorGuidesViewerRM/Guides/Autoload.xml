@@ -145,6 +145,7 @@
 	<Script file="Legendary\AresLegendariesWotLK.lua"/>
 	<!-- Explicitly selected synthetic viewer fixtures; never a default route. -->
 	<Script file="Tests\ParchmentFixtures.lua"/>
+	<Script file="Tests\AdventureFixture.lua"/>
 	<Script file="Guide01.lua"/>
 	<Script file="Guide02.lua"/>
 	<Script file="Guide03.lua"/>

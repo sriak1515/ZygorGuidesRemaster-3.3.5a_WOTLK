@@ -48,6 +48,7 @@ def main():
 
     shutil.copyfile(ROOT / 'docs/PARCHMENT_PROTOTYPE.md', output / 'INSTALL-AND-TEST.md')
     shutil.copyfile(ROOT / 'docs/PARCHMENT_FIXTURES.md', output / 'FIXTURE-TESTS.md')
+    shutil.copyfile(ROOT / 'docs/PARCHMENT_PLAYTEST.md', output / 'PARCHMENT_PLAYTEST.md')
     shutil.copyfile(ROOT / 'LICENSE', output / 'LICENSE')
     (output / 'vertical-parchment.patch').write_bytes(git('diff', '--binary', BASE, 'HEAD'))
     commit = git('rev-parse', 'HEAD').decode().strip()

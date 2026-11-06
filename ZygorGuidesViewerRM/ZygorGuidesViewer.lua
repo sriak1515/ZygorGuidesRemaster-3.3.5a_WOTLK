@@ -8782,7 +8782,7 @@ function me:OpenQuickMenu(anchor)
 		--]]
 	}
 
-    if self.ParchmentEnabled and self:ParchmentEnabled() then
+    if self.ParchmentEnabled and self:ParchmentEnabled() and self.Parchment:Settings().layout=="split" then
         table.insert(menu,1,{
             text = "Move untagged notes to Context",
             tooltipTitle = "Plain-text reading preference",

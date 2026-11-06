@@ -1,5 +1,7 @@
 # Repeatable parchment client tests — fixture v1
 
+For the new focused product check, use [PARCHMENT_PLAYTEST.md](PARCHMENT_PLAYTEST.md) and `/zgadventure`. The 11 cases below remain technical regressions; `/zgfixture baseline` explicitly selects their legacy split layout.
+
 The agreed vertical parchment brief remains the design specification. These fixtures provide stable content for implementing and checking it. They are synthetic UI test material, not campaign writing or a proposed campaign structure.
 
 The guide is loaded under **Ares' Guide Authoring > UI Tests > Parchment Fixtures v1**. It is never selected automatically and has no default race, class, quest or continuation route. Open it explicitly with `/zgfixture` or choose it through Guides.

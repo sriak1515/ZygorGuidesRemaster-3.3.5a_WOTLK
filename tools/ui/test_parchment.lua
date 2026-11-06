@@ -87,7 +87,7 @@ InCombatLockdown=function() return combat end
 CooldownFrame_SetTimer=function() end
 GetItemCooldown=function() return 0,0,0 end
 GetSpellCooldown=GetItemCooldown
-local profile={skin="remaster",displaymode="guide",framescale=1}
+local profile={skin="remaster",displaymode="guide",framescale=1,parchment={layout="split"}}
 ZygorGuidesViewer={db={profile=profile},Frame=new(UIParent),stepframes={}}
 local ZGV=ZygorGuidesViewer
 function ZGV:GetRemasterFont() return "client-font" end
@@ -210,8 +210,8 @@ assert(P.context.rows[1].label.fontSize>P.action.rows[1].label.fontSize,"Context
 local enlarged=P.context.child:GetHeight()
 sizeMenu[1].func()
 assert(P.context.child:GetHeight()<enlarged and P.action.rows[1].label.fontSize==13,"Context size changed objectives")
-P:SetContextSize(-10);assert(P:Settings().contextsize==14)
-P:SetContextSize(100);assert(P:Settings().contextsize==22)
+P:SetContextSize(-10);assert(P:Settings().contextsize==12)
+P:SetContextSize(100);assert(P:Settings().contextsize==24)
 show({short,direction,unknown,context})
 local split,collapsed=P:Settings().split,P:Settings().collapsed
 local frameLeft,frameBottom=ZGV.Frame:GetLeft(),ZGV.Frame:GetBottom()
@@ -359,7 +359,7 @@ P.SecureButtons=secure
 -- SavedVariables round trip: reconstruct viewer state while keeping the actual profile table.
 s.width,s.height,s.split,s.x,s.y,s.collapsed,s.tools=410,600,0.73,222,333,true,true
 s.contextsize=22
-s.objectivesize=15
+profile.fontsize=15
 P.anchored=nil;ZGV:UpdateParchment()
 assert(ZGV.Frame:GetLeft()==222 and ZGV.Frame:GetBottom()==333)
 P.root=nil;P.initialized=nil;P.anchored=nil;ZGV:UpdateParchment()
@@ -405,10 +405,10 @@ assert(loadfile(root.."/Parser.lua"))()
 assert(loadfile(root.."/Guides/Tests/ParchmentFixtures.lua"))()
 local fixtureGuide=assert(ZGV:ParseEntry(fixtureSource))
 s.split,s.collapsed,s.plaincontext=0.55,false,false
-s.objectivesize=13
+profile.fontsize=13
 for _,geometry in ipairs({{320,380,true},{340,400,false},{410,600,true}}) do
 for _,objectiveSize in ipairs({12,13,16}) do
-s.objectivesize=objectiveSize
+profile.fontsize=objectiveSize
 for _,size in ipairs({14,16,18,20,22}) do
 s.contextsize=size
 s.width,s.height,s.tools=geometry[1],geometry[2],geometry[3]
@@ -462,3 +462,80 @@ end -- compact / minimum / expanded fixture geometries
 assert(loadfile(root.."/../tools/ui/real_step_samples.lua"))()(root,ZGV)
 P:Suspend();assert(not P.root:IsShown())
 print("PASS: parchment partitions, dynamic rows, protected allocations, independent scrolling, completion styles, Context reflow/anchors, explicit reading/auto-progress hold, fixed reader controls, item targets, lockdown, scale, profile round trip and browsing")
+
+-- New default flow: even explicit legacy Context remains in authored order.
+profile.parchment.layout=nil
+profile.parchment.plaincontext=true
+profile.parchment.collapsed=true
+profile.fontsize,profile.fontsecsize=18,8
+P:SetContextSize(17)
+local introduction=goal("Why this task matters.",nil,{context=true})
+local task=goal("Go to the next room.","goto",{tooltip="Use the upper bridge."})
+local ending=goal("Keep this unfamiliar row.","unknown",{context=true})
+show({introduction,task,ending})
+assert(P.action:IsShown() and not P.context:IsShown() and not P.divider:IsShown())
+assert(P.action.rows[1].goal==introduction and P.action.rows[2].goal==task and P.action.rows[3].goal==ending,
+    "flow hid or reordered essential/unknown content")
+assert(P.action.rows[1].label.fontSize==17 and P.action.rows[2].label.fontSize==18 and P.action.rows[2].tip.fontSize==8,
+    "normal primary/secondary and reading sizes are not independent")
+local flowOffset=P.action.scroll
+profile.fontsize,profile.fontsecsize=20,13
+ZGV:UpdateParchment()
+assert(P.action.rows[2].label.fontSize==20 and P.action.rows[2].tip.fontSize==13)
+assert(not P:ReadingActive(),"flow should not hold automatic progression")
+
+-- The reader is explicitly associated, independent, and does not steal actions.
+local background={title="A researched background",body=string.rep("Background text with a useful explanation. ",300)}
+ZGV.CurrentStep.parchmentBackground=background
+ZGV:UpdateParchment()
+assert(P.backgroundLink:IsShown() and P.backgroundLink.label.valueText:find(background.title,1,true))
+P.backgroundLink:GetScript("OnClick")()
+assert(P.background:IsShown() and P.action:IsShown() and not P:ReadingActive())
+assert(P.background.pane.reading and P.background.pane.range>0)
+P.background.pane.bar:SetValue(72)
+local readingOffset=P.background.pane.scroll
+show({goal("Next live task.","talk")})
+assert(not P.backgroundLink:IsShown() and P.background:IsShown())
+assert(P.background.entry==background and P.background.pane.scroll==readingOffset,
+    "automatic step refresh replaced or scrolled the selected background")
+P.background.close:GetScript("OnClick")()
+local current=ZGV.CurrentStep
+assert(not P.background:IsShown() and ZGV.CurrentStep==current)
+P:OpenBackground(background)
+assert(P.background.pane.scroll==readingOffset,"reopening same passage lost position")
+P:Suspend()
+assert(not P.background:IsShown(),"reader survived leaving parchment mode")
+
+-- Migration never overwrites an explicitly saved native size or reading size.
+local savedProfile=ZGV.db.profile
+ZGV.db.profile={fontsize=10,fontsecsize=7,parchment={objectivesize=16,contextsize=19}}
+local migrated=P:Settings()
+assert(ZGV.db.profile.fontsize==10 and ZGV.db.profile.fontsecsize==7 and migrated.contextsize==19)
+assert(migrated.legacyobjectivesize==16,"previous prototype size was not retained for reference")
+ZGV.db.profile={parchment={objectivesize=15}}
+assert(P:Settings().objectivesize==15 and ZGV.db.profile.fontsecsize==13)
+ZGV.db.profile=savedProfile
+print("PASS: unified authored flow, native font controls, safe migration, explicit independent background reader, and progression without reading hold")
+assert(P.background.pane.rows[1].clicker:GetScript("OnClick")==nil,"background retained native goal interaction")
+-- Check the product excerpts at each supported geometry in the frame harness.
+local adventureSource
+function ZGV:RegisterGuide(title,raw) adventureSource=raw end
+assert(loadfile(root.."/Guides/Tests/AdventureFixture.lua"))()
+local adventureGuide=assert(ZGV:ParseEntry(adventureSource));adventureGuide.title=ZGV.AdventureFixtureTitle
+ZGV.CurrentGuide=adventureGuide
+profile.fontsize,profile.fontsecsize=13,11
+local preset=P:Settings();preset.contextsize=14;preset.layout="flow"
+for _,geometry in ipairs({{320,380},{340,400},{410,600}}) do
+    preset.width,preset.height=geometry[1],geometry[2]
+    for i,step in ipairs(adventureGuide.steps) do
+        ZGV.CurrentStep,ZGV.CurrentStepNum=step,i
+        ZGV:UpdateParchment()
+        assert(P.action:IsShown() and not P.context:IsShown())
+        assert(P.action.range==0,"product excerpt requires scrolling at compact baseline")
+        assert(P.action.rows[2].goal==step.goals[2])
+        assert(P.backgroundLink:IsShown()==(i==4))
+        local bottom=P.action.rows[2]:GetBottom()
+        assert(bottom>=P.action:GetBottom(),"product action clipped by viewport")
+    end
+end
+print("PASS: all five product excerpts fit the 320x380 minimum, 340x400 baseline and larger geometry in approximate frame metrics")

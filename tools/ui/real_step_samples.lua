@@ -22,7 +22,8 @@ return function(root,ZGV)
         step.Translate=function() end -- supplied names; no client/server cache here
         local s=P:Settings()
         s.width,s.height,s.tools=340,400,false
-        s.objectivesize,s.contextsize,s.plaincontext,s.collapsed=13,14,mode,false
+        ZGV.db.profile.fontsize=13
+        s.contextsize,s.plaincontext,s.collapsed,s.layout=14,mode,false,"split"
         ZGV.CurrentGuide,ZGV.CurrentStep,ZGV.CurrentStepNum=guide,step,index
         ZGV:UpdateParchment()
         local actions,context=P:Partition(step,mode)

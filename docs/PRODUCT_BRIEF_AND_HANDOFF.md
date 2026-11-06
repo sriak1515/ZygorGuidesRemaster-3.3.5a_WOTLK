@@ -70,6 +70,25 @@ The earlier popout discussion did not settle a separate reader: the prototype de
 
 These are product requirements for rendering and availability, not instructions to invent parser tags now. The existing `|tip`, plain rows, step ordering and optional `|context` metadata provide only part of this contract. Untagged introductions and background are not reliably distinguishable. Keep unknown rows in order. Do not turn every plain paragraph into optional lore.
 
+## Current playable pass: one guide flow
+
+Following the owner's request to simplify and implement a coherent playable pass,
+the viewer now defaults to one authored flow, retains the split as an explicit
+comparison mode, uses normal primary/secondary font preferences, and exposes a
+reading-size setting in both normal settings views. One explicitly associated
+background passage opens in a separate reader without holding progression.
+
+Use [PARCHMENT_PLAYTEST.md](PARCHMENT_PLAYTEST.md) for this build's short review.
+`/zgadventure` selects five simulated public-quest excerpts, including the concise
+Iverron reference and the Ban’ethil background. Existing campaign sources and the
+private uploaded Shadowglen guide are unchanged. The 11 technical cases remain.
+
+All 27 Lua 5.1 scripts pass; native client rendering/input/navigation are not
+validated. History, Library integration, further frame/skin work, and broad event
+modelling are deferred. The specification sections below describe design history
+and proposals; they must not override this reduced implementation scope. The older
+03e01be build reference below is historical; package BUILD.txt identifies this build.
+
 ## Current review reference: presentation and recovery
 
 [Gameplay presentation and recovery](GAMEPLAY_PRESENTATION_AND_RECOVERY.md)

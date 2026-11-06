@@ -34,11 +34,20 @@ function P:Settings()
     local profile = ZGV.db.profile
     profile.parchment = profile.parchment or {}
     local s = profile.parchment
+    -- Respect explicitly saved native font preferences. Only fill unset values
+    -- from the former prototype preset; never overwrite a saved native choice.
+    if not s.nativefonts then
+        s.legacyobjectivesize=s.objectivesize
+        if rawget(profile,"fontsize")==nil then profile.fontsize=tonumber(s.objectivesize) or 13 end
+        if rawget(profile,"fontsecsize")==nil then profile.fontsecsize=max(5,(tonumber(s.objectivesize) or 13)-2) end
+        s.nativefonts=true
+    end
     s.width = max(MIN_WIDTH, tonumber(s.width) or DEFAULT_WIDTH)
     s.height = max(MIN_HEIGHT, tonumber(s.height) or DEFAULT_HEIGHT)
     s.split = clamp(tonumber(s.split) or 0.55, 0, 1)
-    s.contextsize = clamp(math.floor((tonumber(s.contextsize) or 14)/2+0.5)*2,14,22)
-    s.objectivesize = clamp(math.floor((tonumber(s.objectivesize) or 13)+0.5),12,16)
+    s.contextsize = clamp(math.floor((tonumber(s.contextsize) or 14)+0.5),12,24)
+    s.objectivesize = clamp(tonumber(profile.fontsize) or 13,7,24)
+    s.directionsize = clamp(tonumber(profile.fontsecsize) or 11,5,22)
     return s
 end
 
@@ -174,7 +183,7 @@ end
 
 function P:SetContextSize(size)
     local s=self:Settings()
-    local size=clamp(math.floor((tonumber(size) or s.contextsize)/2+0.5)*2,14,22)
+    local size=clamp(math.floor((tonumber(size) or s.contextsize)+0.5),12,24)
     if size==s.contextsize then return end
     self.contextAnchor=self:ScrollAnchor(self.context)
     self.actionAnchor=self:ScrollAnchor(self.action) -- inline prose shares reading type
@@ -184,10 +193,10 @@ end
 
 function P:SetObjectiveSize(size)
     local s=self:Settings()
-    local size=clamp(math.floor((tonumber(size) or s.objectivesize)+0.5),12,16)
+    local size=clamp(math.floor((tonumber(size) or s.objectivesize)+0.5),7,24)
     if size==s.objectivesize then return end
     self.actionAnchor=self:ScrollAnchor(self.action)
-    s.objectivesize=size
+    ZGV.db.profile.fontsize=size
     ZGV:UpdateFrame()
 end
 
@@ -351,7 +360,7 @@ function P:Create()
     end)
     self.lock = button(self.utility,"Lock",58,function() ZGV:ToggleWindowLock() end)
     self.settings = button(self.utility,"Settings",68,function(_,b)
-        if b=="RightButton" then ZGV:ToggleGuideManagerFrame("options") else ZGV:OpenQuickMenu(P.settings) end
+        if b=="RightButton" then ZGV:ToggleGuideManagerFrame("options") else ZGV:OpenOptions() end
     end)
     self.heading = text(root,16) -- essential titles use readable locale client type
     self.heading:SetHeight(24)
@@ -360,6 +369,10 @@ function P:Create()
     tooltip(self.headingHit,function() return P.stepTitle or "Actions" end)
     self.action = self:CreatePane(root)
     self.context = self:CreatePane(root)
+    self.backgroundLink=button(root,"",300,function()
+        local entry=P.backgroundEntry
+        if entry then P:OpenBackground(entry) end
+    end)
     self.divider = CreateFrame("Frame",nil,root)
     self.divider:EnableMouse(true)
     self.divider:RegisterForDrag("LeftButton")
@@ -407,8 +420,8 @@ function P:Create()
     self.smaller=button(self.readerFooter,"A-",28,function() P:SetContextSize(P:Settings().contextsize-2) end)
     self.larger=button(self.readerFooter,"A+",28,function() P:SetContextSize(P:Settings().contextsize+2) end)
     self.fontSize=text(self.readerFooter,12)
-    tooltip(self.smaller,"Smaller reading text (minimum 14). Applies to Context and inline prose; objective text is unchanged.")
-    tooltip(self.larger,"Larger reading text (maximum 22). Applies to Context and inline prose; objective text is unchanged.")
+    tooltip(self.smaller,"Smaller reading text (minimum 12). Applies to story and background; objective text is unchanged.")
+    tooltip(self.larger,"Larger reading text (maximum 24). Applies to story and background; objective text is unchanged.")
     self.back=button(self.readerFooter,"Back to actions",112,function() P:ToggleReading() end)
     self.grip = button(root,"/",18,function() end)
     self.grip:SetScript("OnMouseDown",function(_,b)
@@ -423,11 +436,66 @@ function P:Create()
         s.x,s.y=frame:GetLeft(),frame:GetBottom()
         ZGV:UpdateParchment()
     end)
-    frame:HookScript("OnHide",function() P:ClearSecureButtons() end)
+    frame:HookScript("OnHide",function()
+        P:ClearSecureButtons()
+        if P.background then P.background:Hide() end
+    end)
     self.events=CreateFrame("Frame")
     self.events:RegisterEvent("PLAYER_REGEN_ENABLED")
     self.events:SetScript("OnEvent",function() ZGV.parchmentDirty=true; P:ClearSecureButtons() end)
     self.initialized=true
+end
+
+-- Explicit authored payload only; neither plain text nor |context is classified
+-- as optional background. This small API is used by the product fixture, not a
+-- new guide grammar. The reader never sets expandedReading or pauses the engine.
+function P:OpenBackground(entry)
+    if not entry or type(entry.title)~="string" or type(entry.body)~="string" then return end
+    if not self.background then
+        local f=CreateFrame("Frame",nil,UIParent)
+        f:SetSize(340,400); f:SetFrameStrata("DIALOG")
+        f:SetClampedToScreen(true); f:SetMovable(true); f:EnableMouse(true)
+        f:SetBackdrop({bgFile=white,edgeFile=ZGV.DIR.."\\Skin\\popup_border",edgeSize=10,
+            insets={left=6,right=6,top=6,bottom=6}})
+        f:SetBackdropColor(0.875,0.824,0.706,1)
+        f.header=CreateFrame("Frame",nil,f)
+        point(f.header,f,8,8,324,46)
+        f.header:EnableMouse(true); f.header:RegisterForDrag("LeftButton")
+        f.header:SetScript("OnDragStart",function() if not ZGV.db.profile.windowlocked then f:StartMoving() end end)
+        f.header:SetScript("OnDragStop",function() f:StopMovingOrSizing() end)
+        f.title=text(f.header,14); point(f.title,f.header,4,2,280,40)
+        f.close=button(f.header,"X",24,function() f:Hide() end)
+        point(f.close,f.header,294,0,24,24)
+        f.pane=self:CreatePane(f); f.pane.reading=true
+        point(f.pane,f,12,58,316,328)
+        f.pane.bar:SetPoint("TOPRIGHT",f.pane,"TOPRIGHT",0,0)
+        f.pane.bar:SetPoint("BOTTOMRIGHT",f.pane,"BOTTOMRIGHT",0,0)
+        self.background=f
+    end
+    local f=self.background
+    local changed=f.entry~=entry
+    if changed then
+        f.entry=entry
+        f.goal={text=entry.body,GetStatus=function() return "passive" end}
+        function f.goal:GetText() return self.text end
+    end
+    if not f.placed then
+        f:SetScale(ZGV.db.profile.framescale or 1)
+        local scale=ZGV.Frame:GetEffectiveScale()
+        local right=(ZGV.Frame:GetLeft()+ZGV.Frame:GetWidth()+352)*scale
+        if right>UIParent:GetWidth()*UIParent:GetEffectiveScale() then
+            f:SetPoint("TOPRIGHT",ZGV.Frame,"TOPLEFT",-12,0)
+        else
+            f:SetPoint("TOPLEFT",ZGV.Frame,"TOPRIGHT",12,0)
+        end
+        f.placed=true
+    end
+    f.title:SetText(entry.title); f:Show()
+    self:Fill(f.pane,{f.goal},316,328,nil,changed)
+    -- Background is passive reference, never a native goal click target.
+    local clicker=f.pane.rows[1].clicker
+    clicker:SetScript("OnClick",nil); clicker:SetScript("OnEnter",nil)
+    clicker:SetScript("OnLeave",nil); clicker:EnableMouse(false)
 end
 
 function P:ClearSecureButtons()
@@ -536,7 +604,7 @@ function P:Fill(pane,goals,width,height,step,newStep)
     pane.child.step=step -- GoalOnClick expects row -> step parent identity.
     pane.child:SetWidth(width-14)
     local y,bottom=4,4
-    local reading=pane==self.context
+    local reading=pane==self.context or pane.reading
     local settings=self:Settings()
     for i,goal in ipairs(goals) do
         local row=self:Row(pane,i)
@@ -554,7 +622,7 @@ function P:Fill(pane,goals,width,height,step,newStep)
             or goal.castspell or goal.script or goal.macro or goal.petaction
         setFont(row.label,size)
         row.label:SetSpacing(math.floor(size*((reading or plain) and 0.33 or 0.23)+0.5))
-        setFont(row.tip,max(11,settings.objectivesize-2))
+        setFont(row.tip,settings.directionsize)
         row.tip:SetSpacing(2)
         -- Plain reading text has no icon gutter. Reserve a stable gutter for
         -- rows that can gain an action icon or completion check on refresh.
@@ -639,6 +707,7 @@ end
 function P:Suspend()
     if not self.active then return end
     self.root:Hide()
+    if self.background then self.background:Hide() end
     self:ClearSecureButtons()
     self.active=false; self.anchored=nil
     self.expandedReading=false;self.readingOrigin=nil;self.contextAnchor=nil;self.actionAnchor=nil
@@ -680,6 +749,14 @@ function ZGV:UpdateParchment()
     P.step,P.guide=step,self.CurrentGuide
     if step then step:Translate() end
     local actions,context,story,confirms=P:Partition(step,s.plaincontext)
+    if s.layout~="split" then
+        actions={}
+        for _,goal in ipairs(step and step.goals or {}) do
+            if goal:GetStatus()~="hidden" and not P:IsEmptyInfo(goal) then actions[#actions+1]=goal end
+        end
+        context,story={},false
+        P.expandedReading=false; P.splitting=nil
+    end
     P.confirms=confirms
     local mixed=#context>0 and not story
     P.hasContext,P.mixed=#context>0,mixed
@@ -721,13 +798,20 @@ function ZGV:UpdateParchment()
     point(P.larger,P.readerFooter,54,5,28,22)
     P.fontSize:ClearAllPoints();P.fontSize:SetPoint("TOPLEFT",P.readerFooter,"TOPLEFT",32,-10)
     P.fontSize:SetWidth(22);P.fontSize:SetHeight(16);P.fontSize:SetText(s.contextsize)
-    P.smaller:SetAlpha(s.contextsize>14 and 1 or 0.45)
-    P.larger:SetAlpha(s.contextsize<22 and 1 or 0.45)
+    P.smaller:SetAlpha(s.contextsize>12 and 1 or 0.45)
+    P.larger:SetAlpha(s.contextsize<24 and 1 or 0.45)
     point(P.back,P.readerFooter,w-136,5,112,22)
     setShown(P.back,P.expandedReading)
     local paneTop=top+titleHeight
     -- Both minima include their heading; the actual scroll viewport is below it.
-    ah=max(0,ah-titleHeight); ch=reader and max(0,ch-titleHeight-READER_FOOTER-4) or ch
+    local background=not P.browsing and step and (step.parchmentBackground
+        or (self.AdventureFixtureBackground and self:AdventureFixtureBackground(step)))
+    P.backgroundEntry=background
+    local backgroundHeight=background and 28 or 0
+    ah=max(0,ah-titleHeight-backgroundHeight); ch=reader and max(0,ch-titleHeight-READER_FOOTER-4-backgroundHeight) or ch
+    point(P.backgroundLink,P.root,12,h-38,w-38,24)
+    setShown(P.backgroundLink,not not background)
+    if background then fitLabel(P.backgroundLink.label,"Read: "..background.title,w-38) end
     point(P.action,P.root,12,paneTop,w-24,max(1,ah))
     setShown(P.action,not reader)
     setShown(P.divider,mixed and not reader)
@@ -758,6 +842,7 @@ function ZGV:UpdateParchment()
     self.parchmentDirty=nil
     P:SecureButtons()
     self:ParchmentCooldowns()
+    if P.background and P.background:IsShown() then P:OpenBackground(P.background.entry) end
     P.updating=nil
 end
 
@@ -831,7 +916,10 @@ end
 SLASH_ZGVPARCHMENT1="/zgparchment"
 SlashCmdList.ZGVPARCHMENT=function(cmd)
     cmd=(cmd or ""):lower():match("^%s*(.-)%s*$")
-    if cmd=="off" or cmd=="on" then
+    if cmd=="flow" or cmd=="split" then
+        P:Settings().layout=cmd; P.expandedReading=false; P.actionAnchor=nil; P.contextAnchor=nil
+        ZGV:UpdateFrame(true)
+    elseif cmd=="off" or cmd=="on" then
         ZGV.db.profile.parchmentprototype=cmd=="on"
         ReloadUI() -- explicit mode switch restores the untouched native layout
     elseif cmd=="compact" then
@@ -841,5 +929,5 @@ SlashCmdList.ZGVPARCHMENT=function(cmd)
         ZGV:UpdateFrame(true)
     elseif cmd=="reset" then
         ZGV.db.profile.parchment=nil;P.anchored=nil;ZGV:UpdateFrame(true)
-    else ZGV:Print("/zgparchment on | off (reload); compact (smaller size); reset (position, size and reading preferences)") end
+    else ZGV:Print("/zgparchment flow | split; on | off (reload); compact; reset") end
 end
