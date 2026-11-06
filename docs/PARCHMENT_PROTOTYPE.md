@@ -46,7 +46,7 @@ For testing untagged guides, **Tools > Plain text in Context: on** is an explici
 
 ## Source inspection and real content calibration
 
-Inspected the main viewer's frame creation and compact layout, `ZygorGuidesViewerFrame.lua/.xml`, skin definitions and locale font helper, `Parser.lua`, `Goal.lua`, `Step.lua`, the progression/translation lifecycle, native wheel/step handling, secure overlay/action specifications, and defaults/profile settings in `Options.lua`. There are no `AGENTS.md` files in this checkout and no repository CI workflow or dedicated packaging script. The README distributes the addon as a folder in a ZIP, which the test package follows.
+Inspected the main viewer's frame creation and compact layout, `ZygorGuidesViewerFrame.lua/.xml`, skin definitions and locale font helper, `Parser.lua`, `Goal.lua`, `Step.lua`, the progression/translation lifecycle, native wheel/step handling, secure overlay/action specifications, and defaults/profile settings in `Options.lua`. There are no `AGENTS.md` files in this checkout. The base revision had no repository CI workflow or dedicated packaging script. The prototype now includes `tools/release/package_addon.py` and `.github/workflows/parchment-prototype.yml`; they follow the README's folder-in-a-ZIP installation layout.
 
 `test_parchment_guides.lua` parsed **16,012 steps** across the shipped legacy Alliance/Horde leveling files and imported Alliance/Horde WOTLK leveling files, with **zero parse failures**. It preserves all parsed rows under the default partition. These counts do not evaluate player-specific visibility or quest progress.
 
@@ -88,3 +88,11 @@ The frame double approximates wrapping and frame behavior. Its profile reconstru
 - Guide selection, inline step browsing, previous/next, right-click fast navigation, automatic progression, waypoint clicks, manual completion and close/reopen still work. Test `/zgparchment off` and `on` rollback.
 
 Return a screenshot of a representative mixed step at your normal UI scale, along with any Lua error or inaccessible row. That is the next design checkpoint; decorative refinement is deferred.
+
+## GitHub Actions download
+
+Push `prototype/vertical-parchment` to run **Parchment prototype package** automatically. It uses Python 3.12, installs the test-only `lupa==2.6`, runs all Lua regression scripts, builds the full addon ZIP and verifies its contents against the checkout. The job uses read-only repository permissions. Manual `workflow_dispatch` is also configured.
+
+Open the successful run under **Actions**, then download its **Zygor-parchment-<commit>** artifact (GitHub sign-in may be required). Extract the artifact first; the installable addon ZIP, source patch, installation/client-test notes, build metadata, license, automated check results and checksums are inside. Artifacts are retained for 14 days. Downloading a build does not merge the prototype or publish a release.
+
+Local packaging: `python tools/release/package_addon.py --output-dir dist`.

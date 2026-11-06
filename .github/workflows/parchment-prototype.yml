@@ -1,0 +1,62 @@
+name: Parchment prototype package
+
+on:
+  push:
+    branches:
+      - prototype/vertical-parchment
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the prototype
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install the test-only Lua runtime
+        run: python -m pip install lupa==2.6
+
+      - name: Run Lua 5.1 regressions
+        shell: bash
+        run: |
+          mkdir -p dist
+          python tools/ui/run_checks.py | tee dist/automated-checks.txt
+
+      - name: Build and verify the installable package
+        run: python tools/release/package_addon.py --output-dir dist
+
+      - name: Upload the test build
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: Zygor-parchment-${{ github.sha }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Add download and installation notes
+        env:
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a') as summary:
+              summary.write('## Playable parchment prototype\n\n')
+              summary.write('[Download the build artifact](' + os.environ['ARTIFACT_URL'] + ')\n\n')
+              summary.write('Extract the artifact, then extract the addon ZIP inside it into `Interface/AddOns`. Back up the existing addon and SavedVariables first.\n\n')
+              summary.write('Installation, rollback instructions, source patch, checksums and automated check results are included. **No in-game validation has been performed.**\n')
+          PY
