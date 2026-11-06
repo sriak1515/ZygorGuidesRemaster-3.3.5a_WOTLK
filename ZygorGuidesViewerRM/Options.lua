@@ -77,6 +77,8 @@ function me:Options_RegisterDefaults()
 
 
 			skin = "remaster",
+			parchmentprototype = true,
+			parchment = { width=380, height=520, split=0.55, collapsed=false, tools=false, plaincontext=false },
 			remastercolor = "dark",
 			skincolors={text={0.90,0.92,0.98},back={0.08,0.09,0.12}},
 			showallsteps = false,

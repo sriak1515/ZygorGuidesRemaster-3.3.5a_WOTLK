@@ -61,6 +61,7 @@
 		<!-- <Script file="ZygorGuidesViewerOptions.lua"/> -->
 	<Include file="ZygorMapIcon.xml" />
 	<Include file="ZygorGuidesViewerFrame.xml" />
+	<Script file="Parchment.lua"/>
 	<!-- <Include file="ZygorGuidesViewerMiniFrame.xml"/> -->
 
 	<!-- UI Widget Framework + Gold Guide (must load AFTER main frame) -->

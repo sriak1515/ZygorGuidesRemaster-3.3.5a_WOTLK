@@ -1248,6 +1248,10 @@ function me:ParseEntry(text)
 				goal.condition_complete_raw=params
 				goal.condition_complete = fun
 
+			elseif cmd=="context" then
+				-- Optional presentation metadata; never changes completion or guide text.
+				goal.context = true
+
 			elseif cmd=="info" then
 				goal.action = goal.action or cmd
 				goal.info = params

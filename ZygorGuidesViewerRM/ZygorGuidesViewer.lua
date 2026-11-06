@@ -4070,6 +4070,7 @@ function me:OnEnable()
 end
 
 function me:EnsureOptionalUIProfile(force)
+	if self.ParchmentEnabled and self:ParchmentEnabled() then return end
 	if not force and not self.optionalUiProfilePending then return end
 	self.optionalUiProfilePending = nil
 	if self.ActionButtons_ApplyProfile then
@@ -4781,6 +4782,7 @@ end
 
 
 function me:UpdateLocking()
+	if self.ParchmentEnabled and self:ParchmentEnabled() then return self:UpdateParchment() end
 	-- remove mouse activity in lock mode
 	local locked = self.db.profile["windowlocked"]
 	--self:Debug("lock mode: "..tostring(locked))
@@ -4860,6 +4862,7 @@ end
 --]]
 
 function me:UpdateCooldowns()
+	if self.ParchmentEnabled and self:ParchmentEnabled() then return self:ParchmentCooldowns() end
 	--self:Debug("UpdateCooldowns")
 	if not self.CurrentStep then return end
 	local stepframe = self.stepframes[self.CurrentStepframeNum]
@@ -4954,6 +4957,8 @@ local itemsources={"vendor","drop","ore","herb","skin"}
 local gold_ox,gold_oy=0,0
 
 function me:UpdateFrame(full,onupdate,nonsecure_only)
+	if self.ParchmentEnabled and self:ParchmentEnabled() then return self:UpdateParchment() end
+	if self.Parchment then self.Parchment:Suspend() end
 	if full then self.stepchanged=true end
 
 	if not self.Frame or not self.Frame:IsVisible() then return end
@@ -6052,6 +6057,7 @@ setmetatable(actionicon,{__index=function() return 2 end})
 
 
 function me:UpdateFrameCurrent(nonsecure_only)
+	if self.ParchmentEnabled and self:ParchmentEnabled() then return self:UpdateParchment() end
 	-- current step!
 
 	if self.CurrentStep then	-- hey, it may be missing, if the whole guide is for another class
@@ -6576,6 +6582,7 @@ function me:SetFrameScale(scale)
 end
 
 function me:ReanchorFrame()
+	if self.ParchmentEnabled and self:ParchmentEnabled() then return end
 	local frame = self.Frame
 	local framemaster = frame:GetParent()
 	local upsideup = not self.db.profile.resizeup
@@ -6595,6 +6602,7 @@ function me:ReanchorFrame()
 end
 
 function me:AlignFrame()
+	if self.ParchmentEnabled and self:ParchmentEnabled() then return self:UpdateParchment() end
 	if self.db and self.db.profile and self:IsRemasterSkin() then
 		if self.ApplyRemasterSkin then
 			self:ApplyRemasterSkin(self.visualSkinRefreshOnly)
@@ -6856,6 +6864,8 @@ function me:AlignFrame()
 end
 
 function me:UpdateSkin(visualOnly)
+	if self.ParchmentEnabled and self:ParchmentEnabled() then return self:UpdateParchment() end
+	if self.Parchment then self.Parchment:Suspend() end
 	local preserveHidden = false
 	if self.db and self.db.profile and self.db.profile.hideborder then
 		preserveHidden = self.borderfadedout == true
@@ -7008,6 +7018,7 @@ function me:UpdateSkin(visualOnly)
 end
 
 function me:ApplyRemasterSkin(visualOnly)
+	if self.ParchmentEnabled and self:ParchmentEnabled() then return self:UpdateParchment() end
 	if not self.framesLoaded or not ZygorGuidesViewerFrame or not ZygorGuidesViewerFrame_Border then
 		return
 	end
@@ -7583,6 +7594,7 @@ function me:RestoreLegacySkin()
 end
 
 function me:ResizeFrame()
+	if self.ParchmentEnabled and self:ParchmentEnabled() then return end
 	if self.db and self.db.profile and self:IsRemasterSkin() then
 		if ZGV and ZGV.framemoving then
 			return
@@ -7727,6 +7739,7 @@ end
 
 
 function me:ScrollToCurrentStep()
+	if self.ParchmentEnabled and self:ParchmentEnabled() then return end
 --	if self.ForceScrollToCurrentStep and self.CurrentStep then
 --		self.ForceScrollToCurrentStep = false
 		if self.CurrentStep and self.db.profile.displaymode=="guide" then
@@ -8216,7 +8229,9 @@ function me:Frame_OnShow()
 	if self.suspendRemasterShowRefresh then
 		self.suspendRemasterShowRefresh = nil
 	end
-	if self.optionalUiProfilePending and not self.questLogInitialized then
+	if self.ParchmentEnabled and self:ParchmentEnabled() then
+		-- This viewer never applies an optional UI placement profile.
+	elseif self.optionalUiProfilePending and not self.questLogInitialized then
 		-- Startup-visible viewer: wait until the initial guide/quest-log restore is complete.
 	elseif self.optionalUiProfilePending and self.ScheduleTimer then
 		self:ScheduleTimer(function()
@@ -8351,6 +8366,7 @@ function me:GoalOnClick(goalframe,button)
 					self:SetWaypoint(posX*100,posY*100,title)
 				end
 			end
+			if self.ParchmentEnabled and self:ParchmentEnabled() then return end
 			local max = self.maxQuestLevels[goal.questid]
 			local qname = goal.quest or (goal.questid and tostring(goal.questid)) or "?"
 			self:Print("Quest \""..qname.."\" (#"..tostring(goal.questid).."): done at level "..tostring(goal.parentStep.level)..", reaches to level "..tostring(max))
@@ -8374,9 +8390,9 @@ function me:GoalOnClick(goalframe,button)
 			if goal.quest and IsShiftKeyDown() then
 				self.completedQuests[goal.quest]=nil
 				if goal.questid then self.completedQuests[goal.questid]=nil end
-				self:Print("Marking quest '"..goal.quest.."'"..(goal.questid and " (#"..goal.questid..")" or "").." as not completed.")
+				if not (self.ParchmentEnabled and self:ParchmentEnabled()) then self:Print("Marking quest '"..goal.quest.."'"..(goal.questid and " (#"..goal.questid..")" or "").." as not completed.") end
 			else
-				self:Print("Marking step as incomplete.")
+				if not (self.ParchmentEnabled and self:ParchmentEnabled()) then self:Print("Marking step as incomplete.") end
 			end
 		else
 			--self.recentlyCompletedGoals[goal]=true
@@ -8384,7 +8400,7 @@ function me:GoalOnClick(goalframe,button)
 			if goal.quest and IsShiftKeyDown() then
 				self.completedQuests[goal.quest]=true
 				if goal.questid then self.completedQuests[goal.questid]=true end
-				self:Print("Marking quest '"..goal.quest.."'"..(goal.questid and " (#"..goal.questid..")" or "").." as completed.")
+				if not (self.ParchmentEnabled and self:ParchmentEnabled()) then self:Print("Marking quest '"..goal.quest.."'"..(goal.questid and " (#"..goal.questid..")" or "").." as completed.") end
 			end
 		end
 		self.pause=nil
@@ -8421,7 +8437,7 @@ function me:GoalOnEnter(goalframe)
 		GameTooltip:SetOwner(goalframe,"ANCHOR_TOPRIGHT")
 		GameTooltip:ClearAllPoints()
 		GameTooltip:SetPoint("BOTTOM",goalframe,"TOP")
-		GameTooltip:SetText(goal:GetText())
+		GameTooltip:SetText(self.ParchmentEnabled and self:ParchmentEnabled() and self.Parchment:GoalText(goal) or goal:GetText())
 
 		local lines=1
 		if infoline then
@@ -8598,7 +8614,8 @@ function me:OpenGuideMenu()
 	insert_guides(menu,self.db.char.guides_history,nil,false)
 
 	-- display!
-	UIDropDownMenu_SetAnchor(ZGVFMenu, -50, 15, "TOPRIGHT", ZygorGuidesViewerFrame_Border_TitleBar, "BOTTOMRIGHT")
+	local menuAnchor = self.ParchmentEnabled and self:ParchmentEnabled() and self.Parchment.header or ZygorGuidesViewerFrame_Border_TitleBar
+	UIDropDownMenu_SetAnchor(ZGVFMenu, -50, 15, "TOPRIGHT", menuAnchor, "BOTTOMRIGHT")
 	-- The dropdown width must be established before EasyMenu positions the
 	-- first list. Setting it afterwards leaves the first opening anchored with
 	-- the legacy default width; later openings only look correct because that

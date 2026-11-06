@@ -111,6 +111,7 @@ local function ApplyLineLayout(line, layout, useRemaster)
 end
 
 function ZGV:ApplyFrameLayout()
+	if self.ParchmentEnabled and self:ParchmentEnabled() then return self:UpdateParchment() end
 	if not self.db or not self.db.profile then
 		return
 	end
@@ -753,6 +754,7 @@ local function SetRemasterChromeHidden(remasterFrames, hidden, force)
 end
 
 function ZGV:RefreshAutoHideBorderState()
+	if self.ParchmentEnabled and self:ParchmentEnabled() then return end
 	if not ZGVF or not self.db or not self.db.profile then return end
 	local hideborder = self.db.profile.hideborder
 	local opacity = self.db.profile.opacitymain or 1.0
@@ -819,6 +821,7 @@ function ZGV:RefreshAutoHideBorderState()
 end
 
 function ZGV:ForceHideBorderNow()
+	if self.ParchmentEnabled and self:ParchmentEnabled() then return end
 	if not self.db or not self.db.profile or not self.db.profile.hideborder then return end
 	local isRemaster = self:IsRemasterSkin()
 	local remasterFrames = isRemaster and self.RemasterFrames
@@ -841,6 +844,7 @@ function ZygorGuidesViewerFrameMaster_OnUpdate(self,elapsed)
 end
 
 function ZygorGuidesViewerFrame_OnUpdate(self,elapsed)
+	if ZGV.ParchmentEnabled and ZGV:ParchmentEnabled() then return ZGV:ParchmentTick(elapsed) end
 	--[[
 	if not self.aligned then
 		self.aligned=true
