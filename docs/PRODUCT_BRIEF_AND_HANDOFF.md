@@ -70,25 +70,29 @@ The earlier popout discussion did not settle a separate reader: the prototype de
 
 These are product requirements for rendering and availability, not instructions to invent parser tags now. The existing `|tip`, plain rows, step ordering and optional `|context` metadata provide only part of this contract. Untagged introductions and background are not reliably distinguishable. Keep unknown rows in order. Do not turn every plain paragraph into optional lore.
 
-## Current review reference: Ban’ethil storyboard
+## Current review reference: presentation and recovery
 
-See [Ban’ethil adventure storyboard](BANETHIL_STORYBOARD.md) for the current
-route-grounded review draft. The owner found the initial researched Ban’ethil
-content useful, with narrative tone still open to refinement, and requested this
-storyboard before further UI implementation.
+[Gameplay presentation and recovery](GAMEPLAY_PRESENTATION_AND_RECOVERY.md)
+is the current two-fixture behavior proposal. The owner accepted the first concise
+Iverron treatment as sufficient for this exercise and asked to proceed with
+presentation, progression, and missed-story recovery. Do not expand that prose
+during this pass.
+
+Use Iverron for a simple story without an optional article, and
+[Ban’ethil](BANETHIL_STORYBOARD.md) for a richer sequence with shared optional
+background. The proposal specifies main-guide presentation, a separate reader,
+Recent story recovery, event timing, timed delivery, and reload/fixture cases.
+The reader, recovery model, and typography integration remain unimplemented;
+this work changed documentation only. The uploaded Shadowglen source is unchanged
+and was not copied into the repository.
 
 The earlier [synthetic adventure proposal](ADVENTURE_FLOW_AND_FIXTURES.md) was
-labelled agreed too early. It remains design history. The separate Zygor-managed
-reader and Recent story behavior are proposals to assess with the concrete
-Ban’ethil scenes, not settled architecture or implemented features.
+labelled agreed too early. It remains design history. The new document records a
+behavior proposal, not blanket approval of architecture or parser syntax.
+Library integration, campaign routing changes, native navigation validation,
+and skin refinement remain deferred.
 
-The storyboard follows the older Alliance route’s actual interleaving of relic
-collection and Oben’s story, includes one complete optional background passage,
-and specifies fast-progression/reload cases. It does not change campaign guides,
-parser syntax, UI code, or the playable build. Navigation and native layout remain
-unverified. Library integration and shared source ownership remain deferred.
-
-## Product questions to assess with the storyboard
+## Product questions to assess with the two fixtures
 
 1. **Continuity during automatic progression:** How does important recently shown story remain recoverable if an objective completes quickly? A small recent-story/recap history is a candidate, not an implemented feature. Avoid solving this by forcing a confirmation on every step. The platform must not guess whether the player has read a passage.
 2. **Optional reader ownership:** A second window managed by Zygor, an Azeroth Library addon, or a shared content source? The website can complement this, but essential in-game context must work without it. Do not assume the old client can display arbitrary live web pages. Inspect the actual library/content project before committing to integration.
@@ -140,7 +144,7 @@ Use synthetic or owner-authorized material and clearly label fixtures. Do not re
 |---|---|---|
 | Requirements reset | Recorded here | Use as current product reference |
 | Compact typography | Implemented; owner says much better | Integrate normal font controls |
-| Essential story in normal flow | Supported for untagged inline rows; experience not fully specified | Review the Ban’ethil storyboard before implementation |
+| Essential story in normal flow | Supported for untagged inline rows; experience not fully specified | Test the two-fixture presentation proposal |
 | Optional separate reader | Not implemented | Choose its behavior/ownership using that same walkthrough |
 | Story timing/continuity | Not solved by the placement toggle | Explicit progress states plus fast-progression case |
 | Book/page identity | Owner still sees a frame | Refine after behavior is settled; no larger footprint assumed |
@@ -150,4 +154,4 @@ Recommended sequence: first make the small behavior walkthrough/fixture plan con
 
 ## Starting a fresh session
 
-Read this file first, then inspect the current branch and actual code. Preserve completed work. Treat the owner's requirements above as the product goal, distinguish implemented behavior from proposals, and retain the boundary that guide writing/format belongs to the owner. The current task is to review docs/BANETHIL_STORYBOARD.md as the concrete introduction → action → consequence + optional-depth example before changing UI or parser behavior. Keep its proposed behaviors distinct from the governing requirements. Ask at most the focused question needed by the walkthrough. Do not claim a new reader, font integration or timing model already exists.
+Read this file first, then inspect the current branch and actual code. Preserve completed work. Treat the owner's requirements above as the product goal, distinguish implemented behavior from proposals, and retain the boundary that guide writing/format belongs to the owner. Use docs/GAMEPLAY_PRESENTATION_AND_RECOVERY.md as the current presentation/progression/recovery proposal, with the concise Iverron sample and Ban’ethil storyboard as content references, before changing UI or parser behavior. Keep its proposed behaviors distinct from the governing requirements. Ask at most the focused question needed by the walkthrough. Do not claim a new reader, font integration or timing model already exists.
