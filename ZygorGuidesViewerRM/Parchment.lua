@@ -12,6 +12,9 @@ local CONTEXT_CHROME = 18
 local TITLE_HEIGHT = 24
 local MIN_WIDTH, MIN_HEIGHT = 320, 380
 local DEFAULT_WIDTH, DEFAULT_HEIGHT = 340, 400
+-- Same sixteen-cell objective atlas and action mapping as the original viewer.
+local objectiveIcons={accept=5,turnin=6,kill=7,get=8,collect=8,buy=8,
+    goal=9,home=10,fpath=11,goto=12,talk=13}
 local function clamp(n, lo, hi) return max(lo, min(hi, n)) end
 
 -- Native 3.3.5a frames do not provide SetShown. Avoid depending on a
@@ -164,12 +167,13 @@ function P:CreatePane(parent)
     pane.bar = CreateFrame("Slider",nil,parent)
     pane.bar:SetOrientation("VERTICAL")
     pane.bar:SetWidth(10)
-    pane.bar:SetThumbTexture("Interface\\Buttons\\UI-ScrollBar-Knob")
-    pane.bar:GetThumbTexture():SetSize(10,26)
+    pane.bar:SetThumbTexture(white)
+    pane.bar:GetThumbTexture():SetSize(6,28)
+    pane.bar:GetThumbTexture():SetVertexColor(0.38,0.32,0.21,1)
     pane.bar.track=pane.bar:CreateTexture(nil,"BACKGROUND")
     pane.bar.track:SetTexture(white)
-    pane.bar.track:SetVertexColor(0.40,0.32,0.20,0.32)
-    pane.bar.track:SetWidth(1)
+    pane.bar.track:SetVertexColor(0.40,0.32,0.20,0.18)
+    pane.bar.track:SetWidth(6)
     pane.bar.track:SetPoint("TOP",pane.bar,"TOP",0,0)
     pane.bar.track:SetPoint("BOTTOM",pane.bar,"BOTTOM",0,0)
     pane.bar:SetValueStep(1)
@@ -199,6 +203,14 @@ function P:Create()
     root:SetBackdropColor(0.847,0.788,0.651,1)
     root:SetBackdropBorderColor(0.48,0.40,0.26,1)
     self.root = root
+    -- Crop the paper interior of the Wrath quest greeting texture (the native
+    -- material begins below its header). Keep the opaque base for contrast.
+    self.paper=root:CreateTexture(nil,"ARTWORK")
+    self.paper:SetTexture("Interface\\QuestFrame\\UI-QuestGreeting-TopLeft")
+    self.paper:SetTexCoord(0.16,0.90,0.40,0.90)
+    self.paper:SetVertexColor(1,1,1,0.22)
+    self.paper:SetPoint("TOPLEFT",root,"TOPLEFT",5,-34)
+    self.paper:SetPoint("BOTTOMRIGHT",root,"BOTTOMRIGHT",-5,5)
     self.header = CreateFrame("Frame",nil,root)
     self.header:SetBackdrop({bgFile=white})
     self.header:SetBackdropColor(0.16,0.19,0.14,1)
@@ -255,6 +267,10 @@ function P:Create()
         if b=="RightButton" then ZGV:ToggleGuideManagerFrame("options") else ZGV:OpenQuickMenu(P.settings) end
     end)
     self.heading = text(root,16)
+    if QuestTitleFont then
+        local file,_,flags=QuestTitleFont:GetFont()
+        if file then self.heading:SetFont(file,18,flags) end
+    end
     self.heading:SetHeight(24)
     self.headingHit=CreateFrame("Frame",nil,root)
     self.headingHit:EnableMouse(true)
@@ -277,6 +293,11 @@ function P:Create()
     self.divider.rule:SetHeight(1)
     self.divider.rule:SetPoint("LEFT",self.collapse,"RIGHT",6,0)
     self.divider.rule:SetPoint("RIGHT",self.divider,"RIGHT",0,0)
+    self.divider.grab=self.divider:CreateTexture(nil,"OVERLAY")
+    self.divider.grab:SetTexture(white)
+    self.divider.grab:SetVertexColor(0.43,0.35,0.22,1)
+    self.divider.grab:SetSize(18,3)
+    self.divider.grab:SetPoint("CENTER",self.divider.rule,"CENTER",0,0)
     self.divider:SetScript("OnDragStart",function()
         if not ZGV.db.profile.windowlocked and not P:Settings().collapsed then P.splitting=true end
     end)
@@ -380,12 +401,17 @@ function P:Row(pane,index)
     row.actionHolder:SetPoint("TOPLEFT",row,"TOPLEFT",0,0)
     row.actionHolder.icon=row.actionHolder:CreateTexture(nil,"ARTWORK")
     row.actionHolder.icon:SetAllPoints(row.actionHolder)
+    row.marker=row:CreateTexture(nil,"ARTWORK")
+    row.marker:SetSize(16,16)
+    row.marker:SetPoint("TOPLEFT",row,"TOPLEFT",0,-1)
+    row.marker:SetTexture(ZGV.DIR.."\\Skin\\icons")
     row.completion=CreateFrame("Frame",nil,row)
     row.completion:SetFrameLevel(row.actionHolder:GetFrameLevel()+2)
     row.completion:SetSize(16,16)
     row.completion.icon=row.completion:CreateTexture(nil,"OVERLAY")
     row.completion.icon:SetAllPoints(row.completion)
-    row.completion.icon:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
+    row.completion.icon:SetTexture(ZGV.DIR.."\\Skin\\icons")
+    row.completion.icon:SetTexCoord(2/16,3/16,0,1)
     row.cooldown=CreateFrame("Cooldown",nil,row.actionHolder,"CooldownFrameTemplate")
     row.cooldown:SetAllPoints(row.actionHolder)
     pane.rows[index]=row
@@ -422,7 +448,8 @@ function P:Fill(pane,goals,width,height,step,newStep)
         point(row,pane.child,0,y,width-14,22)
         -- Plain reading text has no icon gutter. Reserve a stable gutter for
         -- rows that can gain an action icon or completion check on refresh.
-        local indent=self:IsPlain(goal) and 0 or 28
+        local plain=self:IsPlain(goal)
+        local indent=plain and 0 or 24
         row.label:ClearAllPoints()
         row.label:SetPoint("TOPLEFT",row,"TOPLEFT",indent,0)
         row.label:SetWidth(width-14-indent)
@@ -453,6 +480,11 @@ function P:Fill(pane,goals,width,height,step,newStep)
         row:SetHeight(h)
         row.label:SetTextColor(unpack(complete and {0.28,0.34,0.22} or ink))
         local spec=ZGV:InlineButtonsEnabled() and ZGV:GetGoalActionSpec(goal)
+        -- A pending objective must not look like a paragraph with a blank gutter.
+        -- Item/spell/script buttons occupy this same gutter and retain priority.
+        local iconIndex=objectiveIcons[goal.action] or 4
+        row.marker:SetTexCoord((iconIndex-1)/16,iconIndex/16,0,1)
+        setShown(row.marker,not plain and not complete and not spec)
         row.actionHolder:Hide()
         if spec then
             if goal.buttonicon then spec.icon=goal.buttonicon end
@@ -556,6 +588,7 @@ function ZGV:UpdateParchment()
     point(P.divider,P.root,12,dividerTop,w-24,CONTEXT_CHROME)
     point(P.collapse,P.divider,0,0,82,CONTEXT_CHROME)
     P.collapse.label:SetText(s.collapsed and "Context +" or "Context -")
+    setShown(P.divider.grab,not s.collapsed)
     local ct=story and paneTop or dividerTop+CONTEXT_CHROME
     point(P.context,P.root,12,ct,w-24,max(1,ch))
     setShown(P.context,story or (mixed and not s.collapsed))

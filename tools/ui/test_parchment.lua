@@ -95,6 +95,7 @@ function ZGV:GoalOnClick(clicker,b) self.clicked=clicker:GetParent().goal;self.c
 function ZGV:InlineButtons_ApplySecureOverlaySpec(b,s,h) assert(not combat);b.actionSpec=s;b:Show() end
 assert(loadfile(root.."/Parchment.lua"))()
 local P=ZGV.Parchment
+ZGV.DIR="Interface\\AddOns\\ZygorGuidesViewerRM"
 assert(CreateFrame("Frame").SetShown==nil,"client double must not invent SetShown")
 local nativeSource=assert(io.open(root.."/ZygorGuidesViewer.lua","rb")):read("*a")
 local menuStart=assert(nativeSource:find("function me:OpenQuickMenu(anchor)",1,true))
@@ -139,6 +140,8 @@ assert(P.action.rows[2].goal==direction,"untagged directions moved out of Action
 assert(P.context:IsShown() and P.context.range>0)
 assert(not P.reading,"placement preference must not consume a viewer row")
 assert(P.context.rows[1].label:GetWidth()==P.context.child:GetWidth(),"reading text retained an unused icon gutter")
+assert(P.action.rows[1].marker:IsShown(),"pending objective has no marker")
+assert(not P.action.rows[2].marker:IsShown(),"plain direction was marked as an objective")
 local closedBody=P.actionHeight+P.contextHeight
 P:Settings().tools=true;ZGV:UpdateParchment()
 local openBody=P.actionHeight+P.contextHeight
@@ -176,6 +179,9 @@ for i=1,30 do short.complete=i%2==0;ZGV:UpdateParchment() end
 assert(P.context.scroll==scroll,"ordinary refresh reset story scroll")
 assert(ZGV.Frame:GetWidth()==w and ZGV.Frame:GetHeight()==h,"progress changed footprint")
 assert(P.action.rows[1].completion:IsShown(),"completed objective lacks symbol")
+assert(not P.action.rows[1].marker:IsShown(),"completion left the pending symbol visible")
+short.complete=false;ZGV:UpdateParchment()
+assert(P.action.rows[1].marker:IsShown() and not P.action.rows[1].completion:IsShown(),"reopened objective did not restore pending symbol")
 local s=P:Settings();local savedSplit=s.split;s.collapsed=true;ZGV:UpdateParchment()
 assert(not P.context:IsShown() and P.divider:IsShown() and not P.context.bar:IsShown())
 s.collapsed=false;ZGV:UpdateParchment();assert(s.split==savedSplit and P.context.scroll==scroll)
@@ -226,6 +232,7 @@ local item=goal("Use the very long item name","use",{spec={type="item",itemid=12
 show({item,context})
 assert(P.action.rows[1].inlineActionSpec==item.spec)
 assert(P.action.rows[1].actionHolder.icon.texture=="atlas")
+assert(not P.action.rows[1].marker:IsShown(),"objective symbol obscures an inline item button")
 -- Test clipping with explicit holder positions, independent of the frame double's font metrics.
 local row=P.action.rows[1]
 local realTop,realBottom=row.actionHolder.GetTop,row.actionHolder.GetBottom
