@@ -93,7 +93,7 @@ local settings=P:Settings()
 settings.x,settings.y=123,234
 ZGV.db.profile.windowlocked=true;ZGV.db.profile.framescale=0.8
 SlashCmdList.ZGVPARCHMENTFIXTURE("baseline")
-assert(settings.width==380 and settings.height==520 and settings.split==0.55)
+assert(settings.width==340 and settings.height==400 and settings.split==0.55)
 assert(not settings.tools and not settings.collapsed and not settings.plaincontext)
 assert(settings.x==123 and settings.y==234 and ZGV.db.profile.windowlocked and ZGV.db.profile.framescale==0.8,"fixture preset moved or rescaled the user's UI")
 for n=1,11 do SlashCmdList.ZGVPARCHMENTFIXTURE(tostring(n));assert(selectedStep==n) end

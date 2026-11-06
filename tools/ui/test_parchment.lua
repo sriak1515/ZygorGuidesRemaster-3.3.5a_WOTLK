@@ -179,14 +179,29 @@ assert(P.action.rows[1].completion:IsShown(),"completed objective lacks symbol")
 local s=P:Settings();local savedSplit=s.split;s.collapsed=true;ZGV:UpdateParchment()
 assert(not P.context:IsShown() and P.divider:IsShown() and not P.context.bar:IsShown())
 s.collapsed=false;ZGV:UpdateParchment();assert(s.split==savedSplit and P.context.scroll==scroll)
-for _,height in ipairs({440,520,700}) do
+for _,height in ipairs({380,400,440,520,700}) do
  for _,tools in ipairs({false,true}) do
   for _,split in ipairs({0,0.01,0.5,0.99,1}) do
+   s.width,s.height,s.tools,s.split=320,height,tools,split
+   ZGV:UpdateParchment()
    local a,c,top=P:Allocation(height,tools,true,false,false,split)
-   assert(a>=160 and c+P.divider:GetHeight()>=144 and a+c+P.divider:GetHeight()+top+14<=height+0.01,"split violated protected allocation")
+   assert(a>=160 and c+P.divider:GetHeight()>=144 and a+c+P.divider:GetHeight()+top<=height,"split violated protected allocation")
+   local actualAction=P.action:GetHeight()+P.headingHit:GetTop()-P.action:GetTop()
+   assert(actualAction>=160 and P.context:GetHeight()+P.divider:GetHeight()>=144,"rendered minimum regions are squeezed")
+   assert(P.context:GetBottom()>=ZGV.Frame:GetBottom(),"context extends beyond compact window")
+   assert(P.action:GetTop()<=P.headingHit:GetBottom(),"action viewport covers its fixed heading")
   end
  end
 end
+s.width,s.height,s.tools,s.split=w,h,false,savedSplit
+ZGV:UpdateParchment()
+-- Explicit compact command preserves anchor, chosen split and client/addon scale.
+local oldX,oldY,oldSplit,oldScale=s.x,s.y,s.split,profile.framescale
+s.width,s.height,s.tools=440,600,true
+SlashCmdList.ZGVPARCHMENT("compact")
+assert(s.width<w+1 and s.height<600 and not s.tools)
+assert(s.x==oldX and s.y==oldY and s.split==oldSplit and profile.framescale==oldScale)
+s.width,s.height=w,h;ZGV:UpdateParchment()
 local goals={}
 for i=1,45 do goals[i]=goal(string.rep("A deliberately long name ",8)..i,"kill") end
 show(goals)
@@ -272,7 +287,9 @@ assert(loadfile(root.."/Step.lua"))()
 assert(loadfile(root.."/Parser.lua"))()
 assert(loadfile(root.."/Guides/Tests/ParchmentFixtures.lua"))()
 local fixtureGuide=assert(ZGV:ParseEntry(fixtureSource))
-s.width,s.height,s.split,s.collapsed,s.tools,s.plaincontext=380,520,0.55,false,false,false
+s.split,s.collapsed,s.plaincontext=0.55,false,false
+for _,geometry in ipairs({{320,380,true},{340,400,false},{410,600,true}}) do
+s.width,s.height,s.tools=geometry[1],geometry[2],geometry[3]
 ZGV.CurrentGuide=fixtureGuide
 for n,step in ipairs(fixtureGuide.steps) do
     ZGV.CurrentStep=step;ZGV.CurrentStepNum=n
@@ -284,6 +301,9 @@ for n,step in ipairs(fixtureGuide.steps) do
         for i,g in ipairs(goals) do
             assert(pane.rows[i].goal==g and pane.rows[i]:IsShown(),"fixture lost rendered row")
             assert(pane.rows[i].label:GetHeight()>=pane.rows[i].label:GetStringHeight(),"fixture text was capped")
+            if pane.rows[i].tip:IsShown() then
+                assert(pane.rows[i].tip:GetBottom()>=pane.rows[i]:GetBottom(),"direction tip was not included in row height")
+            end
         end
         if pane:IsShown() and #goals>0 then
             pane.bar:SetValue(pane.range)
@@ -299,5 +319,6 @@ for n,step in ipairs(fixtureGuide.steps) do
     if n==8 then assert(story and P.context.range>0 and P.continue:IsShown(),"long reading state failed") end
 end
 
+end -- compact / minimum / expanded fixture geometries
 P:Suspend();assert(not P.root:IsShown())
 print("PASS: parchment partitions, dynamic rows, protected allocations, scroll isolation, progress stability, story confirms, item atlas, clipped secure targets, lockdown, scale, profile round trip and browsing")

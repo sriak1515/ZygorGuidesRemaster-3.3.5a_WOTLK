@@ -20,7 +20,7 @@ SlashCmdList.ZGVPARCHMENTFIXTURE = function(value)
         -- Explicit preset: change only this viewer's layout preferences.
         -- Preserve position, lock, addon scale and the client's UI scale.
         local settings=ZGV.Parchment:Settings()
-        settings.width,settings.height,settings.split=380,520,0.55
+        settings.width,settings.height,settings.split=340,400,0.55
         settings.tools,settings.collapsed,settings.plaincontext=false,false,false
     end
     if command == "reset" or command == "baseline" or command == "" then
