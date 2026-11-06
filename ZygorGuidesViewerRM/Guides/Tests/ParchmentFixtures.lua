@@ -22,6 +22,10 @@ SlashCmdList.ZGVPARCHMENTFIXTURE = function(value)
         local settings=ZGV.Parchment:Settings()
         settings.width,settings.height,settings.split=340,400,0.55
         settings.tools,settings.collapsed,settings.plaincontext=false,false,false
+        settings.contextsize=16
+        ZGV.Parchment.expandedReading=false
+        ZGV.Parchment.readingOrigin=nil
+        ZGV.Parchment.contextAnchor=nil
     end
     if command == "reset" or command == "baseline" or command == "" then
         ZGV.ParchmentFixtureTokenUsed = false

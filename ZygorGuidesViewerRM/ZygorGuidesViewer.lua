@@ -4577,6 +4577,9 @@ end
 -- 09-09-24: 
 function me:TryToCompleteStep(force)
 	if not self.CurrentStep then return end
+	-- An explicit Context reading session holds automatic progression only.
+	-- Previous/next still use SkipStep; no authoring/completion state is changed.
+	if self.ParchmentEnabled and self:ParchmentEnabled() and self.Parchment:ReadingActive() then return end
 	local triedStepBefore = self.lasttriedstep
 	local wasCompletedBefore = self.lastwascompleted
 	local previousGoalStateSig = self.lastCurrentStepGoalStateSig
@@ -8792,6 +8795,16 @@ function me:OpenQuickMenu(anchor)
             end,
             keepShownOnClick = true,
         })
+        local sizes={}
+        for _,size in ipairs({16,18,20,22}) do
+            local value=size
+            sizes[#sizes+1]={
+                text=tostring(value),
+                checked=function() return self.Parchment:Settings().contextsize==value end,
+                func=function() self.Parchment:SetContextSize(value) end,
+            }
+        end
+        table.insert(menu,2,{text="Context text size",notCheckable=true,hasArrow=true,menuList=sizes})
     end
 
 	-- Gear Advisor submenu

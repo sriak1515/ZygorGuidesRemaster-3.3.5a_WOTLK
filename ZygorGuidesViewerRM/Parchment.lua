@@ -7,9 +7,11 @@ ZGV.Parchment = P
 local white = "Interface\\Buttons\\WHITE8X8"
 local ink = {0.188, 0.161, 0.122}
 local light = {0.925, 0.875, 0.749}
+local completedInk = {0.30, 0.32, 0.28} -- grey-olive, readable on opaque paper
 local min, max = math.min, math.max
 local CONTEXT_CHROME = 18
 local TITLE_HEIGHT = 24
+local READER_FOOTER = 30
 local MIN_WIDTH, MIN_HEIGHT = 320, 380
 local DEFAULT_WIDTH, DEFAULT_HEIGHT = 340, 400
 -- Same sixteen-cell objective atlas and action mapping as the original viewer.
@@ -35,6 +37,7 @@ function P:Settings()
     s.width = max(MIN_WIDTH, tonumber(s.width) or DEFAULT_WIDTH)
     s.height = max(MIN_HEIGHT, tonumber(s.height) or DEFAULT_HEIGHT)
     s.split = clamp(tonumber(s.split) or 0.55, 0, 1)
+    s.contextsize = clamp(math.floor((tonumber(s.contextsize) or 16)/2+0.5)*2,16,22)
     return s
 end
 
@@ -98,13 +101,16 @@ function P:Allocation(height, tools, mixed, collapsed, story, split)
     return action, available - action, top
 end
 
-local function text(parent, size, color)
-    local fs = parent:CreateFontString(nil,"ARTWORK")
+local function setFont(fs, size)
     local font = STANDARD_TEXT_FONT
     if GameFontNormal and GameFontNormal.GetFont then
         font = GameFontNormal:GetFont() or font
     end
     if not fs:SetFont(font, size) then fs:SetFont(STANDARD_TEXT_FONT, size) end
+end
+local function text(parent, size, color)
+    local fs = parent:CreateFontString(nil,"ARTWORK")
+    setFont(fs,size)
     fs:SetJustifyH("LEFT")
     fs:SetJustifyV("TOP")
     fs:SetTextColor(unpack(color or ink))
@@ -155,6 +161,52 @@ local function clean(value)
     return tostring(value or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
 end
 
+function P:ScrollAnchor(pane)
+    if not pane then return end
+    local value=pane.bar:GetValue() or 0
+    for _,row in ipairs(pane.rows) do
+        if row.goal and (row.contentY or 0)+row:GetHeight()>value then
+            return {goal=row.goal,fraction=max(0,value-(row.contentY or 0))/max(1,row:GetHeight()),value=value}
+        end
+    end
+end
+
+function P:SetContextSize(size)
+    local s=self:Settings()
+    local size=clamp(math.floor((tonumber(size) or s.contextsize)/2+0.5)*2,16,22)
+    if size==s.contextsize then return end
+    self.contextAnchor=self:ScrollAnchor(self.context)
+    s.contextsize=size
+    ZGV:UpdateFrame()
+end
+
+function P:ReadingActive()
+    return self.active and self.expandedReading and not self.browsing
+        and self.step==ZGV.CurrentStep and self.guide==ZGV.CurrentGuide
+end
+
+function P:ToggleReading()
+    if self.expandedReading then
+        self.expandedReading=false
+        -- A larger viewport may clamp the offset. An untouched reading preview
+        -- should return to the original position, not silently scroll the pane.
+        if not self.readerMoved then self.contextAnchor=self.readingOrigin end
+        self.readingOrigin=nil
+    elseif self.hasContext and self.mixed then
+        self.expandedReading=true;self.browsing=false
+        self.readingOrigin=self:ScrollAnchor(self.context);self.readerMoved=false
+    else return end
+    self.splitting=nil
+    ZGV:UpdateFrame()
+end
+
+local function metalButton(control, close)
+    control:SetBackdrop({bgFile=white,edgeFile=ZGV.DIR.."\\Skin\\popup_border",
+        edgeSize=10,insets={left=3,right=3,top=3,bottom=3}})
+    control:SetBackdropColor(unpack(close and {0.27,0.10,0.07,1} or {0.12,0.15,0.10,1}))
+    control:SetBackdropBorderColor(0.88,0.77,0.52,1)
+end
+
 function P:CreatePane(parent)
     local pane = CreateFrame("ScrollFrame",nil,parent)
     pane:EnableMouse(true)
@@ -179,6 +231,7 @@ function P:CreatePane(parent)
     pane.bar:SetValueStep(1)
     pane.bar:SetScript("OnValueChanged",function(_,value)
         pane:SetVerticalScroll(value)
+        if pane==P.context and P.expandedReading and not P.updating then P.readerMoved=true end
         P:SecureButtons()
     end)
     local function wheel(_, delta)
@@ -197,9 +250,7 @@ function P:Create()
     local root = CreateFrame("Frame",nil,frame)
     root:SetAllPoints(frame)
     root:SetFrameLevel(frame:GetFrameLevel()+10)
-    -- Reuse a frame edge already used throughout this 3.3.5a addon.
-    root:SetBackdrop({bgFile=white,edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",
-        tile=true,tileSize=16,edgeSize=12,insets={left=4,right=4,top=4,bottom=4}})
+    root:SetBackdrop({bgFile=white,insets={left=5,right=5,top=5,bottom=5}})
     root:SetBackdropColor(0.847,0.788,0.651,1)
     root:SetBackdropBorderColor(0.48,0.40,0.26,1)
     self.root = root
@@ -208,12 +259,23 @@ function P:Create()
     self.paper=root:CreateTexture(nil,"ARTWORK")
     self.paper:SetTexture("Interface\\QuestFrame\\UI-QuestGreeting-TopLeft")
     self.paper:SetTexCoord(0.16,0.90,0.40,0.90)
-    self.paper:SetVertexColor(1,1,1,0.22)
-    self.paper:SetPoint("TOPLEFT",root,"TOPLEFT",5,-34)
-    self.paper:SetPoint("BOTTOMRIGHT",root,"BOTTOMRIGHT",-5,5)
+    self.paper:SetVertexColor(1,1,1,0.18)
+    self.paper:SetPoint("TOPLEFT",root,"TOPLEFT",7,-34)
+    self.paper:SetPoint("BOTTOMRIGHT",root,"BOTTOMRIGHT",-7,7)
+    -- Wrath's gold dialog rim (also used by its loot frames); keep it above
+    -- children without intercepting input. The center stays quiet parchment.
+    self.rim=CreateFrame("Frame",nil,root)
+    self.rim:SetAllPoints(root)
+    self.rim:SetFrameLevel(root:GetFrameLevel()+20)
+    self.rim:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Gold-Border",edgeSize=20})
+    self.rim:SetBackdropBorderColor(0.90,0.84,0.70,1)
     self.header = CreateFrame("Frame",nil,root)
     self.header:SetBackdrop({bgFile=white})
     self.header:SetBackdropColor(0.16,0.19,0.14,1)
+    self.header.grain=self.header:CreateTexture(nil,"BACKGROUND")
+    self.header.grain:SetAllPoints(self.header)
+    self.header.grain:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Background")
+    self.header.grain:SetVertexColor(0.50,0.55,0.40,0.24)
     self.header.rule=self.header:CreateTexture(nil,"BORDER")
     self.header.rule:SetTexture(white)
     self.header.rule:SetVertexColor(0.48,0.40,0.26,0.8)
@@ -239,7 +301,9 @@ function P:Create()
         end
         P:SecureButtons()
     end)
-    self.chapter = text(self.header,13,{0.890,0.780,0.569})
+    self.chapterPlate=CreateFrame("Frame",nil,self.header)
+    metalButton(self.chapterPlate)
+    self.chapter = text(self.chapterPlate,13,{0.890,0.780,0.569})
     self.chapter:SetPoint("TOPLEFT",self.header,"TOPLEFT",8,-7)
     self.chapter:SetHeight(16)
     tooltip(self.header,function() return (self.fullTitle or "Zygor Guides Remaster")..(ZGV.CurrentStep and ZGV.CurrentStep.title and ("\n"..clean(ZGV.CurrentStep.title)) or "") end)
@@ -254,6 +318,7 @@ function P:Create()
     self.close = button(self.header,"X",22,function() ZGV:ToggleFrame() end)
     for _,control in ipairs({self.prev,self.next,self.tools,self.close}) do
         control.label:SetTextColor(unpack(light))
+        metalButton(control,control==self.close)
     end
     self.utility = CreateFrame("Frame",nil,root)
     self.guides = button(self.utility,"Guides",60,function(_,b)
@@ -266,11 +331,7 @@ function P:Create()
     self.settings = button(self.utility,"Settings",68,function(_,b)
         if b=="RightButton" then ZGV:ToggleGuideManagerFrame("options") else ZGV:OpenQuickMenu(P.settings) end
     end)
-    self.heading = text(root,16)
-    if QuestTitleFont then
-        local file,_,flags=QuestTitleFont:GetFont()
-        if file then self.heading:SetFont(file,18,flags) end
-    end
+    self.heading = text(root,18) -- essential titles use readable locale client type
     self.heading:SetHeight(24)
     self.headingHit=CreateFrame("Frame",nil,root)
     self.headingHit:EnableMouse(true)
@@ -287,19 +348,21 @@ function P:Create()
         local s=P:Settings(); s.collapsed=not s.collapsed; ZGV:UpdateParchment()
     end)
     tooltip(self.collapse,"Collapse or restore Context. The saved split is retained.")
+    self.read = button(self.divider,"Read",40,function() P:ToggleReading() end)
+    tooltip(self.read,"Read Context in the full panel. Automatic progression waits until you return to Actions or navigate manually.")
     self.divider.rule = self.divider:CreateTexture(nil,"BORDER")
     self.divider.rule:SetTexture(white)
     self.divider.rule:SetVertexColor(0.533,0.447,0.286,1)
     self.divider.rule:SetHeight(1)
     self.divider.rule:SetPoint("LEFT",self.collapse,"RIGHT",6,0)
-    self.divider.rule:SetPoint("RIGHT",self.divider,"RIGHT",0,0)
+    self.divider.rule:SetPoint("RIGHT",self.divider,"RIGHT",-46,0)
     self.divider.grab=self.divider:CreateTexture(nil,"OVERLAY")
     self.divider.grab:SetTexture(white)
     self.divider.grab:SetVertexColor(0.43,0.35,0.22,1)
     self.divider.grab:SetSize(18,3)
     self.divider.grab:SetPoint("CENTER",self.divider.rule,"CENTER",0,0)
     self.divider:SetScript("OnDragStart",function()
-        if not ZGV.db.profile.windowlocked and not P:Settings().collapsed then P.splitting=true end
+        if not ZGV.db.profile.windowlocked and not P:Settings().collapsed and not P.expandedReading then P.splitting=true end
     end)
     self.divider:SetScript("OnDragStop",function() P.splitting=nil end)
     tooltip(self.divider,"Drag to divide Actions and Context. Lock prevents dragging. Click Context to collapse or restore.")
@@ -312,6 +375,19 @@ function P:Create()
         else ZGV:SkipStep(1) end
     end)
     tooltip(self.continue,function() return P.confirms and P.confirms[1] and P:GoalText(P.confirms[1]) or "Continue to the next step" end)
+    self.readerFooter=CreateFrame("Frame",nil,root)
+    self.readerFooter.rule=self.readerFooter:CreateTexture(nil,"BORDER")
+    self.readerFooter.rule:SetTexture(white)
+    self.readerFooter.rule:SetVertexColor(0.53,0.44,0.28,0.8)
+    self.readerFooter.rule:SetHeight(1)
+    self.readerFooter.rule:SetPoint("TOPLEFT",self.readerFooter,"TOPLEFT",0,0)
+    self.readerFooter.rule:SetPoint("TOPRIGHT",self.readerFooter,"TOPRIGHT",0,0)
+    self.smaller=button(self.readerFooter,"A-",28,function() P:SetContextSize(P:Settings().contextsize-2) end)
+    self.larger=button(self.readerFooter,"A+",28,function() P:SetContextSize(P:Settings().contextsize+2) end)
+    self.fontSize=text(self.readerFooter,12)
+    tooltip(self.smaller,"Smaller Context text (minimum 16). Objective text is unchanged.")
+    tooltip(self.larger,"Larger Context text (maximum 22). Objective text is unchanged.")
+    self.back=button(self.readerFooter,"Back to actions",112,function() P:ToggleReading() end)
     self.grip = button(root,"/",18,function() end)
     self.grip:SetScript("OnMouseDown",function(_,b)
         if b=="LeftButton" and not ZGV.db.profile.windowlocked then
@@ -438,6 +514,8 @@ function P:Fill(pane,goals,width,height,step,newStep)
     pane.child.step=step -- GoalOnClick expects row -> step parent identity.
     pane.child:SetWidth(width-14)
     local y=4
+    local reading=pane==self.context
+    local size=reading and self:Settings().contextsize or 16
     for i,goal in ipairs(goals) do
         local row=self:Row(pane,i)
         row.goal=goal; row.inlineActionSpec=nil
@@ -446,6 +524,9 @@ function P:Fill(pane,goals,width,height,step,newStep)
             ZGV:GoalOnClick(self,b)
         end)
         point(row,pane.child,0,y,width-14,22)
+        row.contentY=y
+        setFont(row.label,size)
+        row.label:SetSpacing(math.floor(size*0.33+0.5))
         -- Plain reading text has no icon gutter. Reserve a stable gutter for
         -- rows that can gain an action icon or completion check on refresh.
         local plain=self:IsPlain(goal)
@@ -458,12 +539,14 @@ function P:Fill(pane,goals,width,height,step,newStep)
         local tip=goal.tooltip or goal.routesharedtip
         goal._display_tooltip=tip
 
-        local complete=goal:GetStatus()=="complete"
+        local status=goal:GetStatus()
+        row.status=status
+        local complete=not reading and status=="complete"
         row.label:SetText(value)
         setShown(row.completion,complete)
         row.completion:ClearAllPoints()
         row.completion:SetPoint("TOPLEFT",row,"TOPLEFT",0,0)
-        local textHeight=max(16,row.label:GetStringHeight())
+        local textHeight=max(size,row.label:GetStringHeight())
         row.label:SetHeight(textHeight)
         local h=max(22,textHeight)
         setShown(row.tip,tip and tip~="")
@@ -478,12 +561,14 @@ function P:Fill(pane,goals,width,height,step,newStep)
             h=max(h,textHeight+3+tipHeight)
         end
         row:SetHeight(h)
-        row.label:SetTextColor(unpack(complete and {0.28,0.34,0.22} or ink))
+        row.label:SetTextColor(unpack(complete and completedInk or ink))
+        row.tip:SetTextColor(unpack(complete and completedInk or {0.32,0.27,0.19}))
         local spec=ZGV:InlineButtonsEnabled() and ZGV:GetGoalActionSpec(goal)
         -- A pending objective must not look like a paragraph with a blank gutter.
         -- Item/spell/script buttons occupy this same gutter and retain priority.
         local iconIndex=objectiveIcons[goal.action] or 4
         row.marker:SetTexCoord((iconIndex-1)/16,iconIndex/16,0,1)
+        row.marker:SetDesaturated(status=="impossible" or status=="obsolete")
         setShown(row.marker,not plain and not complete and not spec)
         row.actionHolder:Hide()
         if spec then
@@ -497,7 +582,7 @@ function P:Fill(pane,goals,width,height,step,newStep)
             row.completion:SetPoint("TOPLEFT",row,"TOPLEFT",8,-8)
         end
         row:Show()
-        y=y+h+6
+        y=y+h+(reading and 10 or 6)
     end
     for i=#goals+1,#pane.rows do
         pane.rows[i].goal=nil; pane.rows[i].inlineActionSpec=nil; pane.rows[i]:Hide()
@@ -505,7 +590,20 @@ function P:Fill(pane,goals,width,height,step,newStep)
     pane.child:SetHeight(max(height,y+4))
     pane.range=max(0,y+4-height)
     pane.bar:SetMinMaxValues(0,pane.range)
-    pane.bar:SetValue(newStep and 0 or clamp(pane.bar:GetValue() or 0,0,pane.range))
+    local value=pane.bar:GetValue() or 0
+    if reading and self.contextAnchor then
+        local anchor=self.contextAnchor
+        value=anchor.value
+        for i,goal in ipairs(goals) do
+            if goal==anchor.goal then
+                local row=pane.rows[i]
+                value=row.contentY+anchor.fraction*row:GetHeight()
+                break
+            end
+        end
+        self.contextAnchor=nil
+    end
+    pane.bar:SetValue(newStep and 0 or clamp(value,0,pane.range))
     pane:SetVerticalScroll(pane.bar:GetValue())
     setShown(pane.bar,pane.range>0 and pane:IsShown())
 end
@@ -515,6 +613,7 @@ function P:Suspend()
     self.root:Hide()
     self:ClearSecureButtons()
     self.active=false; self.anchored=nil
+    self.expandedReading=false;self.readingOrigin=nil;self.contextAnchor=nil
 end
 
 function ZGV:UpdateParchment()
@@ -547,26 +646,33 @@ function ZGV:UpdateParchment()
     local w,h=frame:GetWidth(),frame:GetHeight()
     local step=self.CurrentStep
     local newStep=P.step~=step or P.guide~=self.CurrentGuide
-    if newStep then P.browsing=false end
+    if newStep then
+        P.browsing=false;P.expandedReading=false;P.readingOrigin=nil;P.contextAnchor=nil
+    end
     P.step,P.guide=step,self.CurrentGuide
     if step then step:Translate() end
     local actions,context,story,confirms=P:Partition(step,s.plaincontext)
     P.confirms=confirms
     local mixed=#context>0 and not story
-    local ah,ch,top=P:Allocation(h,s.tools,mixed,s.collapsed,story,s.split)
+    P.hasContext,P.mixed=#context>0,mixed
+    if not mixed then P.expandedReading=false;P.readingOrigin=nil end
+    local reader=story or P.expandedReading
+    local ah,ch,top=P:Allocation(h,s.tools,mixed,s.collapsed,reader,s.split)
     P.actionHeight,P.contextHeight=ah,ch
     P.available=ah+ch
     P.bodyTop=top
-    point(P.header,P.root,4,4,w-8,30)
+    point(P.header,P.root,6,5,w-12,29)
     P.fullTitle=self.CurrentGuide and (self.CurrentGuide.title_short or self.CurrentGuide.title) or "Zygor Guides Remaster"
-    fitLabel(P.chapter,clean(P.fullTitle),w-195)
-    point(P.prev,P.header,w-179,4,20,22)
-    P.position:ClearAllPoints();P.position:SetPoint("TOPLEFT",P.header,"TOPLEFT",w-153,-8)
+    local headerWidth=w-12
+    point(P.chapterPlate,P.header,2,1,headerWidth-199,26)
+    fitLabel(P.chapter,clean(P.fullTitle),headerWidth-211)
+    point(P.prev,P.header,headerWidth-191,3,22,22)
+    P.position:ClearAllPoints();P.position:SetPoint("TOPLEFT",P.header,"TOPLEFT",headerWidth-163,-8)
     P.position:SetWidth(57)
     P.position:SetText(tostring(self.CurrentStepNum or 0).." / "..tostring(self.CurrentGuide and self.CurrentGuide.steps and #self.CurrentGuide.steps or 0))
-    point(P.next,P.header,w-92,4,20,22)
-    point(P.tools,P.header,w-66,4,34,22)
-    point(P.close,P.header,w-26,4,18,22)
+    point(P.next,P.header,headerWidth-100,3,22,22)
+    point(P.tools,P.header,headerWidth-72,3,40,22)
+    point(P.close,P.header,headerWidth-26,3,20,22)
     point(P.utility,P.root,12,37,w-24,20)
     setShown(P.utility,not not s.tools)
     point(P.guides,P.utility,0,0,58,20); point(P.steps,P.utility,62,0,50,20)
@@ -574,24 +680,35 @@ function ZGV:UpdateParchment()
     P.lock.label:SetText(self.db.profile.windowlocked and "Unlock" or "Lock")
     P.heading:ClearAllPoints(); P.heading:SetPoint("TOPLEFT",P.root,"TOPLEFT",12,-top)
     P.stepTitle=clean(step and step.title or (story and "Reading" or "Actions"))
-    fitLabel(P.heading,P.stepTitle,w-(story and 124 or 24))
-    point(P.headingHit,P.root,12,top,w-(story and 124 or 24),20)
+    fitLabel(P.heading,P.stepTitle,w-24)
+    point(P.headingHit,P.root,12,top,w-24,20)
     setShown(P.continue,story)
-    point(P.continue,P.root,w-110,top-2,94,22)
+    point(P.continue,P.root,w-118,h-35,98,22)
+    point(P.readerFooter,P.root,12,h-READER_FOOTER-10,w-24,READER_FOOTER)
+    setShown(P.readerFooter,reader)
+    point(P.smaller,P.readerFooter,0,5,28,22)
+    point(P.larger,P.readerFooter,54,5,28,22)
+    P.fontSize:ClearAllPoints();P.fontSize:SetPoint("TOPLEFT",P.readerFooter,"TOPLEFT",32,-10)
+    P.fontSize:SetWidth(22);P.fontSize:SetHeight(16);P.fontSize:SetText(s.contextsize)
+    P.smaller:SetAlpha(s.contextsize>16 and 1 or 0.45)
+    P.larger:SetAlpha(s.contextsize<22 and 1 or 0.45)
+    point(P.back,P.readerFooter,w-136,5,112,22)
+    setShown(P.back,P.expandedReading)
     local paneTop=top+TITLE_HEIGHT
     -- Both minima include their heading; the actual scroll viewport is below it.
-    ah=max(0,ah-TITLE_HEIGHT); ch=story and max(0,ch-TITLE_HEIGHT) or ch
+    ah=max(0,ah-TITLE_HEIGHT); ch=reader and max(0,ch-TITLE_HEIGHT-READER_FOOTER-4) or ch
     point(P.action,P.root,12,paneTop,w-24,max(1,ah))
-    setShown(P.action,not story)
-    setShown(P.divider,mixed)
+    setShown(P.action,not reader)
+    setShown(P.divider,mixed and not reader)
     local dividerTop=paneTop+ah
     point(P.divider,P.root,12,dividerTop,w-24,CONTEXT_CHROME)
     point(P.collapse,P.divider,0,0,82,CONTEXT_CHROME)
+    point(P.read,P.divider,w-64,0,40,CONTEXT_CHROME)
     P.collapse.label:SetText(s.collapsed and "Context +" or "Context -")
     setShown(P.divider.grab,not s.collapsed)
-    local ct=story and paneTop or dividerTop+CONTEXT_CHROME
+    local ct=reader and paneTop or dividerTop+CONTEXT_CHROME
     point(P.context,P.root,12,ct,w-24,max(1,ch))
-    setShown(P.context,story or (mixed and not s.collapsed))
+    setShown(P.context,reader or (mixed and not s.collapsed))
     for _,pane in ipairs({P.action,P.context}) do
         pane.bar:ClearAllPoints()
         pane.bar:SetPoint("TOPRIGHT",pane,"TOPRIGHT",0,0)
@@ -616,6 +733,7 @@ end
 function P:Browse(width,top,height)
     self.action:Show();self.context:Hide();self.context.bar:Hide();self.divider:Hide();self.continue:Hide()
     self.heading:SetText("Choose a step")
+    self.readerFooter:Hide()
     point(self.action,self.root,12,top,width,height)
     local rows={}
     for n,step in ipairs(ZGV.CurrentGuide and ZGV.CurrentGuide.steps or {}) do

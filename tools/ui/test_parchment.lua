@@ -47,6 +47,7 @@ function Frame:GetEffectiveScale() return self.scale*(self.parent and self.paren
 function Frame:GetFrameLevel() return self.level or 1 end
 function Frame:SetFrameLevel(n) self.level=n end
 function Frame:GetFrameStrata() return "MEDIUM" end
+function Frame:GetAlpha() return 1 end
 function Frame:SetFont(path,size) self.font=path;self.fontSize=size;return true end
 function Frame:SetText(s) self.valueText=tostring(s or "") end
 function Frame:SetSpacing(n) self.spacing=n end
@@ -72,8 +73,10 @@ function Frame:SetVerticalScroll(v) self.scroll=v end
 function Frame:CreateTexture() return new(self) end
 function Frame:CreateFontString() return new(self) end
 function Frame:SetAttribute(k,v) assert(not combat,"secure mutation in combat");self[k]=v end
+function Frame:SetDesaturated(value) self.desaturated=value end
+function Frame:SetTextColor(...) self.color={...} end
 function Frame:RegisterEvent() end
-for _,name in ipairs({"SetVertexColor","SetBackdrop","SetBackdropColor","SetBackdropBorderColor","SetTextColor","SetJustifyH","SetJustifyV","RegisterForClicks","RegisterForDrag","EnableMouseWheel","EnableMouse","SetOrientation","SetValueStep","SetFrameStrata","SetHighlightTexture","SetTexCoord","SetMovable","SetResizable","SetMinResize","SetClampedToScreen","SetClampRectInsets","SetAlpha"}) do Frame[name]=function() end end
+for _,name in ipairs({"SetVertexColor","SetBackdrop","SetBackdropColor","SetBackdropBorderColor","SetJustifyH","SetJustifyV","RegisterForClicks","RegisterForDrag","EnableMouseWheel","EnableMouse","SetOrientation","SetValueStep","SetFrameStrata","SetHighlightTexture","SetTexCoord","SetMovable","SetResizable","SetMinResize","SetClampedToScreen","SetClampRectInsets","SetAlpha"}) do Frame[name]=function() end end
 UIParent=new();UIParent:SetSize(1920,1080)
 CreateFrame=function(_,name,parent) local f=new(parent or UIParent);if name then _G[name]=f end;return f end
 RegisterStateDriver=function(f,k,value) f.driver=value end
@@ -182,6 +185,80 @@ assert(P.action.rows[1].completion:IsShown(),"completed objective lacks symbol")
 assert(not P.action.rows[1].marker:IsShown(),"completion left the pending symbol visible")
 short.complete=false;ZGV:UpdateParchment()
 assert(P.action.rows[1].marker:IsShown() and not P.action.rows[1].completion:IsShown(),"reopened objective did not restore pending symbol")
+local pendingColor=table.concat(P.action.rows[1].label.color,",")
+local contextColor=table.concat(P.context.rows[1].label.color,",")
+local pendingHeight=P.action.rows[1]:GetHeight()
+short.complete=true;ZGV:UpdateParchment()
+assert(table.concat(P.action.rows[1].label.color,",")~=pendingColor,"completed text lacks subdued treatment")
+assert(table.concat(P.context.rows[1].label.color,",")==contextColor,"completion faded unrelated Context")
+assert(P.action.rows[1]:GetHeight()==pendingHeight,"completion changed row geometry")
+short.complete=false;ZGV:UpdateParchment()
+assert(table.concat(P.action.rows[1].label.color,",")==pendingColor,"reopened objective retained completed text styling")
+
+-- Actual settings callbacks reflow Context alone, retaining the reading paragraph.
+ZGV:OpenQuickMenu(P.settings)
+local sizeMenu=assert(openedMenu[2].menuList)
+local paragraph2=goal(string.rep("Second paragraph for reading anchors. ",80),nil,{context=true})
+show({short,context,paragraph2})
+P.context.bar:SetValue(P.context.rows[2].contentY+30)
+local anchor=P:ScrollAnchor(P.context)
+sizeMenu[#sizeMenu].func()
+assert(sizeMenu[#sizeMenu].checked() and P:Settings().contextsize==22)
+local changed=P:ScrollAnchor(P.context)
+assert(changed.goal==anchor.goal and math.abs(changed.fraction-anchor.fraction)<0.001,"font reflow lost reading paragraph")
+assert(P.context.rows[1].label.fontSize>P.action.rows[1].label.fontSize,"Context font control changed no reading text")
+local enlarged=P.context.child:GetHeight()
+sizeMenu[1].func()
+assert(P.context.child:GetHeight()<enlarged and P.action.rows[1].label.fontSize==16,"Context size changed objectives")
+P:SetContextSize(-10);assert(P:Settings().contextsize==16)
+P:SetContextSize(100);assert(P:Settings().contextsize==22)
+show({short,direction,unknown,context})
+local split,collapsed=P:Settings().split,P:Settings().collapsed
+local frameLeft,frameBottom=ZGV.Frame:GetLeft(),ZGV.Frame:GetBottom()
+P.context.bar:SetValue(P.context.range)
+local contextBefore=P.context.scroll
+P.read:GetScript("OnClick")()
+assert(P:ReadingActive() and not P.action:IsShown() and P.context:IsShown())
+assert(not P.divider:IsShown() and P.readerFooter:IsShown() and P.back:IsShown())
+assert(P.context:GetBottom()>=P.readerFooter:GetTop(),"reader passage overlaps fixed controls")
+assert(P:Settings().split==split and P:Settings().collapsed==collapsed)
+for i=1,15 do ZGV:UpdateParchment() end
+assert(P:ReadingActive(),"progress refresh closed explicit reading mode")
+P.back:GetScript("OnClick")()
+assert(not P:ReadingActive() and P.action:IsShown() and P.context.scroll==contextBefore,"reading preview failed to restore its layout/offset")
+assert(ZGV.Frame:GetLeft()==frameLeft and ZGV.Frame:GetBottom()==frameBottom,"reading mode moved the window")
+P.read:GetScript("OnClick")()
+P.context.wheel(nil,1)
+local moved=P.context.scroll
+P.back:GetScript("OnClick")()
+assert(P.context.scroll==moved,"return discarded deliberate reading scroll")
+
+-- Run the actual native progression entry point: explicit reading waits before
+-- completion evaluation; exiting allows normal evaluation without changing pause.
+local completionStart=assert(nativeSource:find("function me:TryToCompleteStep(force)",1,true))
+local completionEnd=assert(nativeSource:find("\nfunction me:",completionStart+1,true))
+local completionChunk=assert(loadstring(nativeSource:sub(completionStart,completionEnd-1)))
+setfenv(completionChunk,setmetatable({me=ZGV},{__index=_G}));completionChunk()
+local completionQueries=0
+ZGV.CurrentStep.IsComplete=function() completionQueries=completionQueries+1;error("completion-evaluated") end
+ZGV.completionelapsed,ZGV.completioninterval=0,0
+local oldPause=ZGV.pause
+P.read:GetScript("OnClick")()
+assert(pcall(ZGV.TryToCompleteStep,ZGV,true) and completionQueries==0,"reader allowed automatic progression")
+local oldSkip=ZGV.SkipStep
+ZGV.SkipStep=function(_,delta) ZGV.manualDelta=delta end
+P.next:GetScript("OnClick")(P.next,"LeftButton")
+assert(ZGV.manualDelta==1,"reading mode disabled manual navigation")
+ZGV.SkipStep=oldSkip
+P.back:GetScript("OnClick")()
+local ok,err=pcall(ZGV.TryToCompleteStep,ZGV,true)
+assert(not ok and tostring(err):find("completion%-evaluated") and completionQueries==1,"return did not release normal progression")
+assert(ZGV.pause==oldPause,"reading mode rewrote progression preference")
+P:SetContextSize(16)
+P.read:GetScript("OnClick")()
+show({short,direction,unknown,context})
+assert(not P:ReadingActive() and P.action:IsShown() and P.context.scroll==0,"new step inherited hidden Actions")
+scroll=P.context.scroll
 local s=P:Settings();local savedSplit=s.split;s.collapsed=true;ZGV:UpdateParchment()
 assert(not P.context:IsShown() and P.divider:IsShown() and not P.context.bar:IsShown())
 s.collapsed=false;ZGV:UpdateParchment();assert(s.split==savedSplit and P.context.scroll==scroll)
@@ -240,6 +317,14 @@ row.actionHolder.GetTop=function() return P.action:GetTop()-2 end
 row.actionHolder.GetBottom=function() return P.action:GetTop()-24 end
 assert(P:HolderVisible(row,P.action))
 P:SecureButtons();assert(P.secure.buttons[1]:IsShown())
+local actionOffset=P.action.scroll
+P.read:GetScript("OnClick")()
+assert(not P.secure.buttons[1]:IsShown(),"reading mode left an item target over hidden Actions")
+local hiddenActionScroll=P.action.scroll
+P.context.wheel(nil,-1)
+assert(P.action.scroll==hiddenActionScroll,"reading wheel moved hidden Actions")
+P.back:GetScript("OnClick")()
+assert(P.secure.buttons[1]:IsShown() and P.action.scroll==actionOffset,"return failed to restore item interaction")
 row.actionHolder.GetTop=function() return P.action:GetTop()+1 end
 assert(not P:HolderVisible(row,P.action));P:SecureButtons();assert(not P.secure.buttons[1]:IsShown())
 combat=true;P:SecureButtons();ZGV:UpdateParchment() -- any attribute mutation errors in the double
@@ -256,11 +341,17 @@ assert(rebound>0,"direct scale change left secure targets at old coordinates")
 P.SecureButtons=secure
 -- SavedVariables round trip: reconstruct viewer state while keeping the actual profile table.
 s.width,s.height,s.split,s.x,s.y,s.collapsed,s.tools=410,600,0.73,222,333,true,true
+s.contextsize=22
 P.anchored=nil;ZGV:UpdateParchment()
 assert(ZGV.Frame:GetLeft()==222 and ZGV.Frame:GetBottom()==333)
 P.root=nil;P.initialized=nil;P.anchored=nil;ZGV:UpdateParchment()
 assert(ZGV.Frame:GetWidth()==410 and ZGV.Frame:GetHeight()==600 and P:Settings().split==0.73)
 assert(not P.context:IsShown() and P.utility:IsShown())
+assert(P:Settings().contextsize==22 and P.context.rows[1].label.fontSize==22,"Context size did not survive profile round trip")
+P.read:GetScript("OnClick")()
+assert(P.context:IsShown() and P:Settings().collapsed,"reading mode changed the saved collapsed preference")
+P.back:GetScript("OnClick")()
+assert(not P.context:IsShown() and P:Settings().split==0.73,"reading return lost collapsed layout")
 P.browsing=true;ZGV:UpdateParchment()
 assert(P.action.rows[1].goal.browse==1)
 P.browsing=false;ZGV:UpdateParchment()
@@ -296,6 +387,8 @@ assert(loadfile(root.."/Guides/Tests/ParchmentFixtures.lua"))()
 local fixtureGuide=assert(ZGV:ParseEntry(fixtureSource))
 s.split,s.collapsed,s.plaincontext=0.55,false,false
 for _,geometry in ipairs({{320,380,true},{340,400,false},{410,600,true}}) do
+for _,size in ipairs({16,18,20,22}) do
+s.contextsize=size
 s.width,s.height,s.tools=geometry[1],geometry[2],geometry[3]
 ZGV.CurrentGuide=fixtureGuide
 for n,step in ipairs(fixtureGuide.steps) do
@@ -324,8 +417,22 @@ for n,step in ipairs(fixtureGuide.steps) do
     if n==2 then assert(P.context.range>0,"long mixed fixture did not overflow Context") end
     if n==7 then assert(P.action.range>0 and P.action.rows[32].goal==step.goals[32],"32-row fixture failed") end
     if n==8 then assert(story and P.context.range>0 and P.continue:IsShown(),"long reading state failed") end
+    if story then
+        assert(P.context:GetBottom()>=P.readerFooter:GetTop(),"story pane covered fixed Continue/font controls")
+        local footerTop=P.readerFooter:GetTop()
+        P.context.wheel(nil,1)
+        assert(P.readerFooter:GetTop()==footerTop,"reading scroll moved its fixed controls")
+    elseif #context>0 then
+        local chosenSplit=s.split
+        P.read:GetScript("OnClick")()
+        assert(P:ReadingActive() and not P.action:IsShown() and not P.divider:IsShown())
+        P.context.bar:SetValue(P.context.range)
+        assert(P.context.rows[#context]:GetBottom()>=P.context:GetBottom(),"last reading line inaccessible")
+        P.back:GetScript("OnClick")()
+        assert(s.split==chosenSplit and P.action:IsShown(),"fixture reading mode lost saved split")
+    end
 end
-
+end -- explicit Context font sizes
 end -- compact / minimum / expanded fixture geometries
 P:Suspend();assert(not P.root:IsShown())
-print("PASS: parchment partitions, dynamic rows, protected allocations, scroll isolation, progress stability, story confirms, item atlas, clipped secure targets, lockdown, scale, profile round trip and browsing")
+print("PASS: parchment partitions, dynamic rows, protected allocations, independent scrolling, completion styles, Context reflow/anchors, explicit reading/auto-progress hold, fixed reader controls, item targets, lockdown, scale, profile round trip and browsing")
