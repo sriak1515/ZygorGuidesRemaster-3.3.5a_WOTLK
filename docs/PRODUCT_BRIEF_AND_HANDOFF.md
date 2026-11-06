@@ -70,7 +70,20 @@ The earlier popout discussion did not settle a separate reader: the prototype de
 
 These are product requirements for rendering and availability, not instructions to invent parser tags now. The existing `|tip`, plain rows, step ordering and optional `|context` metadata provide only part of this contract. Untagged introductions and background are not reliably distinguishable. Keep unknown rows in order. Do not turn every plain paragraph into optional lore.
 
-## Two product questions still needing a concrete example
+## Accepted walkthrough direction
+
+The owner accepted the concrete behavior proposal on 6 November 2026. See
+[Adventure flow and fixture specification](ADVENTURE_FLOW_AND_FIXTURES.md) for the
+agreed synthetic arrival → retrieval → return → aftermath sequence, separate
+Zygor-managed reader prototype, Recent story continuity, explicit event timing,
+and fixture acceptance cases. This resolves the next prototype direction; these
+behaviors remain unimplemented. Library integration and shared source ownership
+remain deferred. Keep the existing technical fixtures and indices.
+
+The questions below are retained as context; use the accepted specification for
+the next implementation pass.
+
+## Two product questions addressed by the accepted example
 
 1. **Continuity during automatic progression:** How does important recently shown story remain recoverable if an objective completes quickly? A small recent-story/recap history is a candidate, not an implemented feature. Avoid solving this by forcing a confirmation on every step. The platform must not guess whether the player has read a passage.
 2. **Optional reader ownership:** A second window managed by Zygor, an Azeroth Library addon, or a shared content source? The website can complement this, but essential in-game context must work without it. Do not assume the old client can display arbitrary live web pages. Inspect the actual library/content project before committing to integration.
