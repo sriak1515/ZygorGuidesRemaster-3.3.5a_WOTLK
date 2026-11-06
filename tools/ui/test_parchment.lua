@@ -152,7 +152,7 @@ assert(closedBody-openBody<=P.utility:GetHeight()+4,"tools consume more than the
 local savedWidth,savedHeight=ZGV.Frame:GetWidth(),ZGV.Frame:GetHeight()
 ZGV:OpenQuickMenu(P.settings)
 local readingOption=assert(openedMenu[1])
-assert(readingOption.text=="Read untagged text in Context")
+assert(readingOption.text=="Move untagged notes to Context")
 readingOption.func();assert(readingOption.checked())
 readingOption.func();assert(not readingOption.checked())
 assert(ZGV.Frame:GetWidth()==savedWidth and ZGV.Frame:GetHeight()==savedHeight,"preference moved the window")
@@ -209,8 +209,8 @@ assert(changed.goal==anchor.goal and math.abs(changed.fraction-anchor.fraction)<
 assert(P.context.rows[1].label.fontSize>P.action.rows[1].label.fontSize,"Context font control changed no reading text")
 local enlarged=P.context.child:GetHeight()
 sizeMenu[1].func()
-assert(P.context.child:GetHeight()<enlarged and P.action.rows[1].label.fontSize==16,"Context size changed objectives")
-P:SetContextSize(-10);assert(P:Settings().contextsize==16)
+assert(P.context.child:GetHeight()<enlarged and P.action.rows[1].label.fontSize==13,"Context size changed objectives")
+P:SetContextSize(-10);assert(P:Settings().contextsize==14)
 P:SetContextSize(100);assert(P:Settings().contextsize==22)
 show({short,direction,unknown,context})
 local split,collapsed=P:Settings().split,P:Settings().collapsed
@@ -254,7 +254,24 @@ P.back:GetScript("OnClick")()
 local ok,err=pcall(ZGV.TryToCompleteStep,ZGV,true)
 assert(not ok and tostring(err):find("completion%-evaluated") and completionQueries==1,"return did not release normal progression")
 assert(ZGV.pause==oldPause,"reading mode rewrote progression preference")
-P:SetContextSize(16)
+P:SetContextSize(14)
+-- Typography controls keep semantic roles independent, without relocating prose.
+ZGV:OpenQuickMenu(P.settings)
+local objectiveMenu=assert(openedMenu[3].menuList)
+local intro=goal(string.rep("An introduction before the task. ",8))
+local after=goal("A passage after the task stays here.")
+show({intro,short,after,context})
+local readingSize=P.context.rows[1].label.fontSize
+objectiveMenu[#objectiveMenu].func()
+assert(objectiveMenu[#objectiveMenu].checked() and P.action.rows[2].label.fontSize==16)
+assert(P.action.rows[1].label.fontSize==readingSize and P.context.rows[1].label.fontSize==readingSize,"objective setting changed reading text")
+assert(P.context.scroll==0,"unchanged reading pane jumped at its top")
+objectiveMenu[1].func();assert(P:Settings().objectivesize==12)
+objectiveMenu[2].func();assert(P:Settings().objectivesize==13)
+P:SetContextSize(22)
+assert(P.action.rows[1].label.fontSize==P.context.rows[1].label.fontSize and P.action.rows[2].label.fontSize==13,"inline prose did not use independent reading type")
+assert(P.action.rows[1].goal==intro and P.action.rows[2].goal==short and P.action.rows[3].goal==after,"font changes reordered authored prose")
+P:SetContextSize(14)
 P.read:GetScript("OnClick")()
 show({short,direction,unknown,context})
 assert(not P:ReadingActive() and P.action:IsShown() and P.context.scroll==0,"new step inherited hidden Actions")
@@ -342,12 +359,14 @@ P.SecureButtons=secure
 -- SavedVariables round trip: reconstruct viewer state while keeping the actual profile table.
 s.width,s.height,s.split,s.x,s.y,s.collapsed,s.tools=410,600,0.73,222,333,true,true
 s.contextsize=22
+s.objectivesize=15
 P.anchored=nil;ZGV:UpdateParchment()
 assert(ZGV.Frame:GetLeft()==222 and ZGV.Frame:GetBottom()==333)
 P.root=nil;P.initialized=nil;P.anchored=nil;ZGV:UpdateParchment()
 assert(ZGV.Frame:GetWidth()==410 and ZGV.Frame:GetHeight()==600 and P:Settings().split==0.73)
 assert(not P.context:IsShown() and P.utility:IsShown())
 assert(P:Settings().contextsize==22 and P.context.rows[1].label.fontSize==22,"Context size did not survive profile round trip")
+assert(P:Settings().objectivesize==15 and P.action.rows[1].label.fontSize==15,"objective size did not survive profile round trip")
 P.read:GetScript("OnClick")()
 assert(P.context:IsShown() and P:Settings().collapsed,"reading mode changed the saved collapsed preference")
 P.back:GetScript("OnClick")()
@@ -386,8 +405,11 @@ assert(loadfile(root.."/Parser.lua"))()
 assert(loadfile(root.."/Guides/Tests/ParchmentFixtures.lua"))()
 local fixtureGuide=assert(ZGV:ParseEntry(fixtureSource))
 s.split,s.collapsed,s.plaincontext=0.55,false,false
+s.objectivesize=13
 for _,geometry in ipairs({{320,380,true},{340,400,false},{410,600,true}}) do
-for _,size in ipairs({16,18,20,22}) do
+for _,objectiveSize in ipairs({12,13,16}) do
+s.objectivesize=objectiveSize
+for _,size in ipairs({14,16,18,20,22}) do
 s.contextsize=size
 s.width,s.height,s.tools=geometry[1],geometry[2],geometry[3]
 ZGV.CurrentGuide=fixtureGuide
@@ -417,6 +439,8 @@ for n,step in ipairs(fixtureGuide.steps) do
     if n==2 then assert(P.context.range>0,"long mixed fixture did not overflow Context") end
     if n==7 then assert(P.action.range>0 and P.action.rows[32].goal==step.goals[32],"32-row fixture failed") end
     if n==8 then assert(story and P.context.range>0 and P.continue:IsShown(),"long reading state failed") end
+    if n==5 and objectiveSize<=13 then assert(P.action.range==0,"four short fixture objectives still need routine scrolling") end
+    if n==7 then assert(P.action.rows[32].label.fontSize==objectiveSize,"overflow shrank the selected objective type") end
     if story then
         assert(P.context:GetBottom()>=P.readerFooter:GetTop(),"story pane covered fixed Continue/font controls")
         local footerTop=P.readerFooter:GetTop()
@@ -433,6 +457,8 @@ for n,step in ipairs(fixtureGuide.steps) do
     end
 end
 end -- explicit Context font sizes
+end -- objective size limits and baseline
 end -- compact / minimum / expanded fixture geometries
+assert(loadfile(root.."/../tools/ui/real_step_samples.lua"))()(root,ZGV)
 P:Suspend();assert(not P.root:IsShown())
 print("PASS: parchment partitions, dynamic rows, protected allocations, independent scrolling, completion styles, Context reflow/anchors, explicit reading/auto-progress hold, fixed reader controls, item targets, lockdown, scale, profile round trip and browsing")

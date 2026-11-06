@@ -8784,9 +8784,9 @@ function me:OpenQuickMenu(anchor)
 
     if self.ParchmentEnabled and self:ParchmentEnabled() then
         table.insert(menu,1,{
-            text = "Read untagged text in Context",
+            text = "Move untagged notes to Context",
             tooltipTitle = "Plain-text reading preference",
-            tooltipText = "Moves plain notes into Context. Leave off to keep untagged directions in Actions. Explicit context markers always apply.",
+            tooltipText = "Moves all eligible notes, including introductions and directions, into Context. Leave off to preserve their authored position. Explicit context markers always apply.",
             checked = function() return self.Parchment:Settings().plaincontext end,
             func = function()
                 local settings=self.Parchment:Settings()
@@ -8796,7 +8796,7 @@ function me:OpenQuickMenu(anchor)
             keepShownOnClick = true,
         })
         local sizes={}
-        for _,size in ipairs({16,18,20,22}) do
+        for _,size in ipairs({14,16,18,20,22}) do
             local value=size
             sizes[#sizes+1]={
                 text=tostring(value),
@@ -8804,7 +8804,17 @@ function me:OpenQuickMenu(anchor)
                 func=function() self.Parchment:SetContextSize(value) end,
             }
         end
-        table.insert(menu,2,{text="Context text size",notCheckable=true,hasArrow=true,menuList=sizes})
+        table.insert(menu,2,{text="Reading text size",notCheckable=true,hasArrow=true,menuList=sizes})
+        local objectives={}
+        for _,size in ipairs({12,13,14,15,16}) do
+            local value=size
+            objectives[#objectives+1]={
+                text=tostring(value),
+                checked=function() return self.Parchment:Settings().objectivesize==value end,
+                func=function() self.Parchment:SetObjectiveSize(value) end,
+            }
+        end
+        table.insert(menu,3,{text="Objective text size",notCheckable=true,hasArrow=true,menuList=objectives})
     end
 
 	-- Gear Advisor submenu
