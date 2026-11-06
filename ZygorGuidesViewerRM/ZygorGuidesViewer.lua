@@ -8779,6 +8779,21 @@ function me:OpenQuickMenu(anchor)
 		--]]
 	}
 
+    if self.ParchmentEnabled and self:ParchmentEnabled() then
+        table.insert(menu,1,{
+            text = "Read untagged text in Context",
+            tooltipTitle = "Plain-text reading preference",
+            tooltipText = "Moves plain notes into Context. Leave off to keep untagged directions in Actions. Explicit context markers always apply.",
+            checked = function() return self.Parchment:Settings().plaincontext end,
+            func = function()
+                local settings=self.Parchment:Settings()
+                settings.plaincontext=not settings.plaincontext
+                self:UpdateFrame()
+            end,
+            keepShownOnClick = true,
+        })
+    end
+
 	-- Gear Advisor submenu
 	table.insert(menu, { text = "", notCheckable = true, disabled = true }) -- separator
 	table.insert(menu, {

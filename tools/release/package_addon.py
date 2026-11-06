@@ -47,6 +47,7 @@ def main():
             assert package.read(name) == path.read_bytes(), f'Package differs from source: {name}'
 
     shutil.copyfile(ROOT / 'docs/PARCHMENT_PROTOTYPE.md', output / 'INSTALL-AND-TEST.md')
+    shutil.copyfile(ROOT / 'docs/PARCHMENT_FIXTURES.md', output / 'FIXTURE-TESTS.md')
     shutil.copyfile(ROOT / 'LICENSE', output / 'LICENSE')
     (output / 'vertical-parchment.patch').write_bytes(git('diff', '--binary', BASE, 'HEAD'))
     commit = git('rev-parse', 'HEAD').decode().strip()

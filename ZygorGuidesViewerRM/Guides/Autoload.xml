@@ -143,6 +143,8 @@
 	<Script file="Fun\AresFunQuestsAlliance.lua"/>
 	<Script file="PetsMounts\AresPetsMountsAlliance.lua"/>
 	<Script file="Legendary\AresLegendariesWotLK.lua"/>
+	<!-- Explicitly selected synthetic viewer fixtures; never a default route. -->
+	<Script file="Tests\ParchmentFixtures.lua"/>
 	<Script file="Guide01.lua"/>
 	<Script file="Guide02.lua"/>
 	<Script file="Guide03.lua"/>

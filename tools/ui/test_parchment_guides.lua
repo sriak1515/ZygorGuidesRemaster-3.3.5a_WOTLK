@@ -45,7 +45,9 @@ for _,entry in ipairs(cols) do
             for n,step in ipairs(parsed.steps) do
                 total=total+1
                 local acts,ctx=P:Partition(step,false)
-                assert(#ctx==0 and #acts==#step.goals,"legacy rows disappeared or were inferred as context")
+                local spacers=0
+                for _,g in ipairs(step.goals) do if P:IsEmptyInfo(g) then spacers=spacers+1 end end
+                assert(#ctx==0 and #acts+spacers==#step.goals,"legacy content disappeared or was inferred as context")
                 local readacts,readctx,story=P:Partition(step,true)
                 local count,chars,plain,item=0,0,0,false
                 for _,g in ipairs(step.goals) do
@@ -84,6 +86,8 @@ for _,s in ipairs({short,long,many,item,story,action}) do
     -- Single confirm moves to the fixed Continue control only in story mode.
     local confirms=0
     for _,g in ipairs(s.step.goals) do if g.action=="confirm" then confirms=confirms+1 end end
-    assert(#a+#c+(isStory and confirms or 0)==#s.step.goals,"representative step lost parsed goals")
+    local spacers=0
+    for _,g in ipairs(s.step.goals) do if P:IsEmptyInfo(g) then spacers=spacers+1 end end
+    assert(#a+#c+(isStory and confirms or 0)+spacers==#s.step.goals,"representative step lost nonempty parsed goals")
 end
 print(string.format("PASS: %d real parsed steps; %d guide parse limitations; explicit context metadata preserves text and actionable rows",total,failures))

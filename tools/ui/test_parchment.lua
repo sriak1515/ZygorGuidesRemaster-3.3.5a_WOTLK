@@ -73,7 +73,7 @@ function Frame:CreateTexture() return new(self) end
 function Frame:CreateFontString() return new(self) end
 function Frame:SetAttribute(k,v) assert(not combat,"secure mutation in combat");self[k]=v end
 function Frame:RegisterEvent() end
-for _,name in ipairs({"SetBackdrop","SetBackdropColor","SetBackdropBorderColor","SetTextColor","SetJustifyH","SetJustifyV","RegisterForClicks","RegisterForDrag","EnableMouseWheel","EnableMouse","SetOrientation","SetValueStep","SetFrameStrata","SetHighlightTexture","SetTexCoord","SetMovable","SetResizable","SetMinResize","SetClampedToScreen","SetClampRectInsets","SetAlpha"}) do Frame[name]=function() end end
+for _,name in ipairs({"SetVertexColor","SetBackdrop","SetBackdropColor","SetBackdropBorderColor","SetTextColor","SetJustifyH","SetJustifyV","RegisterForClicks","RegisterForDrag","EnableMouseWheel","EnableMouse","SetOrientation","SetValueStep","SetFrameStrata","SetHighlightTexture","SetTexCoord","SetMovable","SetResizable","SetMinResize","SetClampedToScreen","SetClampRectInsets","SetAlpha"}) do Frame[name]=function() end end
 UIParent=new();UIParent:SetSize(1920,1080)
 CreateFrame=function(_,name,parent) local f=new(parent or UIParent);if name then _G[name]=f end;return f end
 RegisterStateDriver=function(f,k,value) f.driver=value end
@@ -96,6 +96,16 @@ function ZGV:InlineButtons_ApplySecureOverlaySpec(b,s,h) assert(not combat);b.ac
 assert(loadfile(root.."/Parchment.lua"))()
 local P=ZGV.Parchment
 assert(CreateFrame("Frame").SetShown==nil,"client double must not invent SetShown")
+local nativeSource=assert(io.open(root.."/ZygorGuidesViewer.lua","rb")):read("*a")
+local menuStart=assert(nativeSource:find("function me:OpenQuickMenu(anchor)",1,true))
+local menuEnd=assert(nativeSource:find("function me:OpenQuickSteps()",menuStart,true))
+local menuChunk=assert(loadstring(nativeSource:sub(menuStart,menuEnd-1)))
+local openedMenu
+setfenv(menuChunk,setmetatable({me=ZGV,ZGV=ZGV,L=setmetatable({},{__index=function(_,k) return k end}),
+    UIDropDownMenu_SetAnchor=function() end,
+    EasyMenu=function(menu) openedMenu=menu end},{__index=_G}))
+menuChunk()
+function ZGV:UpdateFrame() return self:UpdateParchment() end
 local function goal(value,action,extra)
     local g=extra or {};g.text=value;g.action=action
     function g:GetStatus() return self.complete and "complete" or "passive" end
@@ -115,9 +125,10 @@ local numeric=goal(nil,"accept",{questid=783,quest="783"})
 assert(not P:GoalText(numeric):find("783",1,true),"numeric quest fallback leaked")
 local counted=goal("Defeat 8 wolves (3/8)","kill",{questid=783})
 assert(P:GoalText(counted):find("3/8",1,true),"unknown quest title replaced objective counts")
+local emptyInfo=goal("","info",{info="",context=true})
 local short=goal("Talk to Deputy Willem","talk")
-show({short})
-assert(P.action:IsShown() and not P.context:IsShown())
+show({short,emptyInfo})
+assert(P.action:IsShown() and not P.context:IsShown(),"empty info created an empty reading region")
 local w,h=ZGV.Frame:GetWidth(),ZGV.Frame:GetHeight()
 local unknown=goal("An unfamiliar row must survive","future-action",{context=true})
 local direction=goal("Stay on the west road")
@@ -126,6 +137,20 @@ local mixed=show({short,direction,unknown,context})
 assert(#P.action.rows>=3 and P.action.rows[3].goal==unknown)
 assert(P.action.rows[2].goal==direction,"untagged directions moved out of Actions")
 assert(P.context:IsShown() and P.context.range>0)
+assert(not P.reading,"placement preference must not consume a viewer row")
+assert(P.context.rows[1].label:GetWidth()==P.context.child:GetWidth(),"reading text retained an unused icon gutter")
+local closedBody=P.actionHeight+P.contextHeight
+P:Settings().tools=true;ZGV:UpdateParchment()
+local openBody=P.actionHeight+P.contextHeight
+assert(closedBody-openBody<=P.utility:GetHeight()+4,"tools consume more than their single row")
+local savedWidth,savedHeight=ZGV.Frame:GetWidth(),ZGV.Frame:GetHeight()
+ZGV:OpenQuickMenu(P.settings)
+local readingOption=assert(openedMenu[1])
+assert(readingOption.text=="Read untagged text in Context")
+readingOption.func();assert(readingOption.checked())
+readingOption.func();assert(not readingOption.checked())
+assert(ZGV.Frame:GetWidth()==savedWidth and ZGV.Frame:GetHeight()==savedHeight,"preference moved the window")
+P:Settings().tools=false;ZGV:UpdateParchment()
 local oldAction=P.action.scroll
 P.context.wheel(nil,-3)
 assert(P.context.scroll>0 and P.action.scroll==oldAction,"mouse wheel leaked to actions")
@@ -138,7 +163,7 @@ for _,cursor in ipairs({-100000,100000}) do
     ZGV:ParchmentTick(0.1)
     P.divider:GetScript("OnDragStop")()
     assert(settings.split>=0 and settings.split<=1)
-    assert(P.actionHeight>=160 and P.contextHeight+28>=144)
+    assert(P.actionHeight>=160 and P.contextHeight+P.divider:GetHeight()>=144)
     assert(ZGV.Frame:GetWidth()==beforeW and ZGV.Frame:GetHeight()==beforeH)
 end
 profile.windowlocked=true
@@ -158,7 +183,7 @@ for _,height in ipairs({440,520,700}) do
  for _,tools in ipairs({false,true}) do
   for _,split in ipairs({0,0.01,0.5,0.99,1}) do
    local a,c,top=P:Allocation(height,tools,true,false,false,split)
-   assert(a>=160 and c+28>=144 and a+c+28+top+14<=height+0.01,"split violated protected allocation")
+   assert(a>=160 and c+P.divider:GetHeight()>=144 and a+c+P.divider:GetHeight()+top+14<=height+0.01,"split violated protected allocation")
   end
  end
 end
@@ -219,5 +244,60 @@ assert(P.action.rows[1].goal.browse==1)
 P.browsing=false;ZGV:UpdateParchment()
 P.action.rows[1].clicker:GetScript("OnClick")(P.action.rows[1].clicker,"RightButton")
 assert(ZGV.clicked==item and ZGV.clickButton=="RightButton","browsing replaced normal goal interactions")
+-- Drive the same shipped fixture through the full viewer in this frame double.
+ZGV.L=setmetatable({coords="%s,%s",stepgoal_use="Use %s"},{__index=function(_,k) return k end})
+ZGV.LM={};ZGV.db.char={};ZGV.BZL={};ZGV.BSZL={};ZGV.BFL={}
+ZGV.StandingNamesEngRev={};ZGV.dailyQuests={};ZGV.instantQuests={}
+ZGV.recentlyCompletedGoals={};ZGV.recentlyStickiedGoals={}
+ZGV.completedQuests={};ZGV.questsbyid={}
+tinsert,tremove=table.insert,table.remove
+function TableKeys(t) local result={} for k in pairs(t or {}) do result[#result+1]=k end return result end
+function ZygorGuidesViewer_L() return ZGV.L end
+QUEST_MONSTERS_KILLED="%s slain: %d/%d"
+UnitLevel=function() return 10 end
+UnitRace=function() return "Night Elf","NightElf" end
+UnitClass=function() return "Druid","DRUID" end
+UnitFactionGroup=function() return "Alliance" end
+GetRealZoneText=function() return "Darnassus" end
+GetItemCount=function() return 0 end
+function ZGV:GetItemData() return "Refreshing Spring Water" end
+function ZGV:RaceClassMatch() return true end
+function ZGV:GetGoalActionSpec(g)
+    if g.script then return {type="macro",macrotext="/run "..g.script,icon="fixture-icon"} end
+end
+local fixtureSource
+function ZGV:RegisterGuide(_,raw) fixtureSource=raw end
+assert(loadfile(root.."/Goal.lua"))()
+assert(loadfile(root.."/Step.lua"))()
+assert(loadfile(root.."/Parser.lua"))()
+assert(loadfile(root.."/Guides/Tests/ParchmentFixtures.lua"))()
+local fixtureGuide=assert(ZGV:ParseEntry(fixtureSource))
+s.width,s.height,s.split,s.collapsed,s.tools,s.plaincontext=380,520,0.55,false,false,false
+ZGV.CurrentGuide=fixtureGuide
+for n,step in ipairs(fixtureGuide.steps) do
+    ZGV.CurrentStep=step;ZGV.CurrentStepNum=n
+    ZGV:UpdateParchment()
+    assert(P.action.scroll==0 and P.context.scroll==0,"fixture transition did not reset scrolling")
+    local actions,context,story=P:Partition(step,false)
+    for _,entry in ipairs({{P.action,actions},{P.context,context}}) do
+        local pane,goals=entry[1],entry[2]
+        for i,g in ipairs(goals) do
+            assert(pane.rows[i].goal==g and pane.rows[i]:IsShown(),"fixture lost rendered row")
+            assert(pane.rows[i].label:GetHeight()>=pane.rows[i].label:GetStringHeight(),"fixture text was capped")
+        end
+        if pane:IsShown() and #goals>0 then
+            pane.bar:SetValue(pane.range)
+            local last=pane.rows[#goals]
+            assert(last:GetBottom()>=pane:GetBottom(),"final fixture line inaccessible")
+            local offset=pane.scroll
+            ZGV:UpdateParchment()
+            assert(pane.scroll==offset,"fixture progress refresh reset scrolling")
+        end
+    end
+    if n==2 then assert(P.context.range>0,"long mixed fixture did not overflow Context") end
+    if n==7 then assert(P.action.range>0 and P.action.rows[32].goal==step.goals[32],"32-row fixture failed") end
+    if n==8 then assert(story and P.context.range>0 and P.continue:IsShown(),"long reading state failed") end
+end
+
 P:Suspend();assert(not P.root:IsShown())
 print("PASS: parchment partitions, dynamic rows, protected allocations, scroll isolation, progress stability, story confirms, item atlas, clipped secure targets, lockdown, scale, profile round trip and browsing")

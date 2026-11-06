@@ -8,6 +8,7 @@ local white = "Interface\\Buttons\\WHITE8X8"
 local ink = {0.188, 0.161, 0.122}
 local light = {0.925, 0.875, 0.749}
 local min, max = math.min, math.max
+local CONTEXT_CHROME = 18
 local function clamp(n, lo, hi) return max(lo, min(hi, n)) end
 
 -- Native 3.3.5a frames do not provide SetShown. Avoid depending on a
@@ -42,10 +43,21 @@ function P:IsPlain(goal)
         and not (goal.IsActionable and goal:IsActionable())
 end
 
+-- Legacy standalone `info` is an empty spacer, not a reading passage.
+-- Preserve every row with prose, decoration, tooltip or interaction payload.
+function P:IsEmptyInfo(goal)
+    return goal.action=="info" and self:IsPlain(goal)
+        and not tostring(goal.info or ""):find("%S")
+        and not tostring(goal.text or ""):find("%S")
+        and not goal.tooltip and not goal.routesharedtip
+        and not goal.icon and not goal.buttonicon and not goal.mapicon
+        and not goal.important and not goal.optional
+end
+
 function P:Partition(step, plaincontext)
     local actions, context, confirms = {}, {}, {}
     for _, goal in ipairs(step and step.goals or {}) do
-        if goal:GetStatus() ~= "hidden" then
+        if goal:GetStatus() ~= "hidden" and not self:IsEmptyInfo(goal) then
             if (goal.context or plaincontext) and self:IsPlain(goal) then
                 context[#context+1] = goal
             elseif goal.action == "confirm" then
@@ -60,7 +72,7 @@ function P:Partition(step, plaincontext)
         -- Preserve author order, including confirm rows amongst objectives.
         actions = {}
         for _, goal in ipairs(step and step.goals or {}) do
-            if goal:GetStatus() ~= "hidden" and not ((goal.context or plaincontext) and self:IsPlain(goal)) then
+            if goal:GetStatus() ~= "hidden" and not self:IsEmptyInfo(goal) and not ((goal.context or plaincontext) and self:IsPlain(goal)) then
                 actions[#actions+1] = goal
             end
         end
@@ -69,14 +81,15 @@ function P:Partition(step, plaincontext)
 end
 
 function P:Allocation(height, tools, mixed, collapsed, story, split)
-    local top = tools and 112 or 58 -- fixed header, tools, and step heading
+    local top = tools and 84 or 58 -- header, one optional tools row, and step heading
     local body = max(0, height - top - 14)
     if story then return 0, body, top end
     if not mixed then return body, 0, top end
-    if collapsed then return body - 28, 0, top end
-    local available = body - 28 -- visible context heading and divider
-    local action = clamp(available * split, 160, available - 116)
-    return action, available - action, top -- context total minimum: 116 + 28
+    if collapsed then return body - CONTEXT_CHROME, 0, top end
+    local available = body - CONTEXT_CHROME
+    local contextMinimum = 144 - CONTEXT_CHROME
+    local action = clamp(available * split, 160, available - contextMinimum)
+    return action, available - action, top
 end
 
 local function backdrop(frame, r,g,b, edge)
@@ -221,10 +234,6 @@ function P:Create()
     self.settings = button(self.utility,"Settings",68,function(_,b)
         if b=="RightButton" then ZGV:ToggleGuideManagerFrame("options") else ZGV:OpenQuickMenu(P.settings) end
     end)
-    self.reading = button(self.utility,"Read plain text as context",210,function()
-        local s=P:Settings(); s.plaincontext=not s.plaincontext; ZGV:UpdateParchment()
-    end)
-    tooltip(self.reading,"Explicit reading preference: moves plain text and info into Context. Turn off to keep untagged directions with Actions.")
     self.heading = text(root,18)
     self.heading:SetHeight(24)
     self.headingHit=CreateFrame("Frame",nil,root)
@@ -235,10 +244,19 @@ function P:Create()
     self.divider = CreateFrame("Frame",nil,root)
     self.divider:EnableMouse(true)
     self.divider:RegisterForDrag("LeftButton")
-    backdrop(self.divider,0.776,0.710,0.557)
-    self.collapse = button(self.divider,"Context -",106,function()
+    self.collapse = CreateFrame("Button",nil,self.divider)
+    self.collapse.label = text(self.collapse,12)
+    self.collapse.label:SetPoint("LEFT",self.collapse,"LEFT",0,0)
+    self.collapse:SetScript("OnClick",function()
         local s=P:Settings(); s.collapsed=not s.collapsed; ZGV:UpdateParchment()
     end)
+    tooltip(self.collapse,"Collapse or restore Context. The saved split is retained.")
+    self.divider.rule = self.divider:CreateTexture(nil,"BORDER")
+    self.divider.rule:SetTexture(white)
+    self.divider.rule:SetVertexColor(0.533,0.447,0.286,1)
+    self.divider.rule:SetHeight(1)
+    self.divider.rule:SetPoint("LEFT",self.collapse,"RIGHT",6,0)
+    self.divider.rule:SetPoint("RIGHT",self.divider,"RIGHT",0,0)
     self.divider:SetScript("OnDragStart",function()
         if not ZGV.db.profile.windowlocked and not P:Settings().collapsed then P.splitting=true end
     end)
@@ -380,7 +398,12 @@ function P:Fill(pane,goals,width,height,step,newStep)
             ZGV:GoalOnClick(self,b)
         end)
         point(row,pane.child,0,y,width-14,22)
-        row.label:SetWidth(width-42)
+        -- Plain reading text has no icon gutter. Reserve a stable gutter for
+        -- rows that can gain an action icon or completion check on refresh.
+        local indent=self:IsPlain(goal) and 0 or 28
+        row.label:ClearAllPoints()
+        row.label:SetPoint("TOPLEFT",row,"TOPLEFT",indent,0)
+        row.label:SetWidth(width-14-indent)
         row.label:SetHeight(0) -- unconstrained wrapping; never cap paragraph height
         local value=self:GoalText(goal)
         local tip=goal.tooltip or goal.routesharedtip
@@ -478,12 +501,10 @@ function ZGV:UpdateParchment()
     point(P.next,P.header,w-129,7,22,24)
     point(P.tools,P.header,w-100,7,58,24)
     point(P.close,P.header,w-34,7,22,24)
-    point(P.utility,P.root,12,44,w-24,50)
+    point(P.utility,P.root,12,44,w-24,24)
     setShown(P.utility,not not s.tools)
     point(P.guides,P.utility,0,0,60,24); point(P.steps,P.utility,64,0,54,24)
     point(P.lock,P.utility,122,0,66,24); point(P.settings,P.utility,192,0,68,24)
-    point(P.reading,P.utility,0,26,w-24,24)
-    P.reading.label:SetText(s.plaincontext and "Plain text in Context: on" or "Plain text in Context: off")
     P.lock.label:SetText(self.db.profile.windowlocked and "Unlock" or "Lock")
     P.heading:ClearAllPoints(); P.heading:SetPoint("TOPLEFT",P.root,"TOPLEFT",12,-(top-14))
     P.stepTitle=clean(step and step.title or (story and "Reading" or "Actions"))
@@ -498,10 +519,10 @@ function ZGV:UpdateParchment()
     setShown(P.action,not story)
     setShown(P.divider,mixed)
     local dividerTop=paneTop+ah
-    point(P.divider,P.root,12,dividerTop,w-24,28)
-    point(P.collapse,P.divider,4,2,116,24)
+    point(P.divider,P.root,12,dividerTop,w-24,CONTEXT_CHROME)
+    point(P.collapse,P.divider,0,0,82,CONTEXT_CHROME)
     P.collapse.label:SetText(s.collapsed and "Context +" or "Context -")
-    local ct=story and paneTop or dividerTop+28
+    local ct=story and paneTop or dividerTop+CONTEXT_CHROME
     point(P.context,P.root,12,ct,w-24,max(1,ch))
     setShown(P.context,story or (mixed and not s.collapsed))
     for _,pane in ipairs({P.action,P.context}) do
