@@ -10,6 +10,12 @@ local light = {0.925, 0.875, 0.749}
 local min, max = math.min, math.max
 local function clamp(n, lo, hi) return max(lo, min(hi, n)) end
 
+-- Native 3.3.5a frames do not provide SetShown. Avoid depending on a
+-- compatibility method attached to some other frame instance.
+local function setShown(frame, visible)
+    if visible then frame:Show() else frame:Hide() end
+end
+
 function ZGV:ParchmentEnabled()
     local p = self.db and self.db.profile
     return p and p.parchmentprototype ~= false and p.skin == "remaster" and p.displaymode == "guide"
@@ -382,7 +388,7 @@ function P:Fill(pane,goals,width,height,step,newStep)
         if tip and tip~="" then value=value.."\n"..clean(tip) end
         local complete=goal:GetStatus()=="complete"
         row.label:SetText(value)
-        row.completion:SetShown(complete)
+        setShown(row.completion,complete)
         row.completion:ClearAllPoints()
         row.completion:SetPoint("TOPLEFT",row,"TOPLEFT",0,0)
         local h=max(22,row.label:GetStringHeight())
@@ -412,7 +418,7 @@ function P:Fill(pane,goals,width,height,step,newStep)
     pane.bar:SetMinMaxValues(0,pane.range)
     pane.bar:SetValue(newStep and 0 or clamp(pane.bar:GetValue() or 0,0,pane.range))
     pane:SetVerticalScroll(pane.bar:GetValue())
-    pane.bar:SetShown(pane.range>0 and pane:IsShown())
+    setShown(pane.bar,pane.range>0 and pane:IsShown())
 end
 
 function P:Suspend()
@@ -473,7 +479,7 @@ function ZGV:UpdateParchment()
     point(P.tools,P.header,w-100,7,58,24)
     point(P.close,P.header,w-34,7,22,24)
     point(P.utility,P.root,12,44,w-24,50)
-    P.utility:SetShown(not not s.tools)
+    setShown(P.utility,not not s.tools)
     point(P.guides,P.utility,0,0,60,24); point(P.steps,P.utility,64,0,54,24)
     point(P.lock,P.utility,122,0,66,24); point(P.settings,P.utility,192,0,68,24)
     point(P.reading,P.utility,0,26,w-24,24)
@@ -483,21 +489,21 @@ function ZGV:UpdateParchment()
     P.stepTitle=clean(step and step.title or (story and "Reading" or "Actions"))
     fitLabel(P.heading,P.stepTitle,w-(story and 132 or 24))
     point(P.headingHit,P.root,12,top-14,w-(story and 132 or 24),24)
-    P.continue:SetShown(story)
+    setShown(P.continue,story)
     point(P.continue,P.root,w-116,top-20,98,24)
     local paneTop=top+16
     -- Both minima include their heading; the actual scroll viewport is below it.
     ah=max(0,ah-16); ch=story and max(0,ch-16) or ch
     point(P.action,P.root,12,paneTop,w-24,max(1,ah))
-    P.action:SetShown(not story)
-    P.divider:SetShown(mixed)
+    setShown(P.action,not story)
+    setShown(P.divider,mixed)
     local dividerTop=paneTop+ah
     point(P.divider,P.root,12,dividerTop,w-24,28)
     point(P.collapse,P.divider,4,2,116,24)
     P.collapse.label:SetText(s.collapsed and "Context +" or "Context -")
     local ct=story and paneTop or dividerTop+28
     point(P.context,P.root,12,ct,w-24,max(1,ch))
-    P.context:SetShown(story or (mixed and not s.collapsed))
+    setShown(P.context,story or (mixed and not s.collapsed))
     for _,pane in ipairs({P.action,P.context}) do
         pane.bar:ClearAllPoints()
         pane.bar:SetPoint("TOPRIGHT",pane,"TOPRIGHT",0,0)
@@ -511,7 +517,7 @@ function ZGV:UpdateParchment()
         P.wasBrowsing=nil
     end
     point(P.grip,P.root,w-19,h-13,16,12)
-    P.grip:SetShown(not self.db.profile.windowlocked)
+    setShown(P.grip,not self.db.profile.windowlocked)
     self.delayFlash=0;self.frameNeedsResizing=0;self.stepchanged=false
     self.parchmentDirty=nil
     P:SecureButtons()

@@ -39,7 +39,7 @@ function Frame:HookScript(k,v) local old=self.scripts[k];self.scripts[k]=functio
 function Frame:GetScript(k) return self.scripts[k] end
 function Frame:Show() self.shown=true end
 function Frame:Hide() self.shown=false end
-function Frame:SetShown(v) self.shown=not not v end
+-- Deliberately omit SetShown: it is unavailable on native 3.3.5a frames.
 function Frame:IsShown() return self.shown end
 function Frame:IsVisible() return self.shown and (not self.parent or self.parent:IsVisible()) end
 function Frame:SetScale(v) self.scale=v end
@@ -95,6 +95,7 @@ function ZGV:GoalOnClick(clicker,b) self.clicked=clicker:GetParent().goal;self.c
 function ZGV:InlineButtons_ApplySecureOverlaySpec(b,s,h) assert(not combat);b.actionSpec=s;b:Show() end
 assert(loadfile(root.."/Parchment.lua"))()
 local P=ZGV.Parchment
+assert(CreateFrame("Frame").SetShown==nil,"client double must not invent SetShown")
 local function goal(value,action,extra)
     local g=extra or {};g.text=value;g.action=action
     function g:GetStatus() return self.complete and "complete" or "passive" end

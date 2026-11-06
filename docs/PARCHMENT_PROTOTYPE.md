@@ -96,3 +96,9 @@ Push `prototype/vertical-parchment` to run **Parchment prototype package** autom
 Open the successful run under **Actions**, then download its **Zygor-parchment-<commit>** artifact (GitHub sign-in may be required). Extract the artifact first; the installable addon ZIP, source patch, installation/client-test notes, build metadata, license, automated check results and checksums are inside. Artifacts are retained for 14 days. Downloading a build does not merge the prototype or publish a release.
 
 Local packaging: `python tools/release/package_addon.py --output-dir dist`.
+
+## First client error report: startup compatibility fix
+
+The supplied 17-record client log starts with a missing `SetShown` method in `Parchment.lua` during `OnInitialize`. That aborts initialization before `self.reputations` is created; the next three addon errors reference that missing table. The remaining 13 records are recursive Blizzard error-window failures (`cursorOffset` and C stack overflow). The prototype now uses native `Show`/`Hide` for all eight visibility toggles. It does not patch the reputation system or the Blizzard error handler to conceal downstream symptoms.
+
+The frame double now omits `SetShown`. Running it against the previous code reproduced the exact reported line-476 error; the corrected viewer passes that same regression and the full suite. This fix still requires a fresh client login or `/reload` and an in-game retest.
