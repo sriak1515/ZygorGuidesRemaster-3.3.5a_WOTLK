@@ -2,6 +2,32 @@
 
 Review material, 7 November 2026. No new live skin or reader behavior in this pass.
 
+## Current comparison: A and developed A
+
+The owner found A more stylish and B too plain to communicate parchment. The
+current comparison is [parchment-refinement.html](design/parchment-refinement.html)
+and its [static overview](design/parchment-refinement.png). Both use the same
+340 x 400 footprint and identical fixture text/text sizes. A remains the baseline;
+A+ adds visible paper grain, warmer shaded edges, inset sheet depth, a restrained
+title ornament, matching reader treatment, and objective icons.
+
+The gold corner pieces and objective markers come from the addon's existing
+Skin/popup_border.tga and Skin/icons.tga. The toolbar also references the existing
+Skin/remaster/leavesofsteel_top.tga. Browser previews embed converted PNG data;
+source assets are unchanged. No DragonUI assets were used.
+
+Paper grain is an illustrative SVG material built for the preview. A standalone
+native parchment image is not bundled in this repository; the client quest-paper
+texture already referenced by Parchment.lua needs an actual client comparison
+before claiming an exact material match. This pass changes no live viewer code.
+
+Browser checks confirm matching sizes, guide content fit, reader toggling,
+resizing, and manual-next closure in the HTML demonstration. This is evidence
+about the preview, not native client behavior.
+
+## Earlier A/B comparison
+
+
 Open [guide-comparison.html](design/guide-comparison.html) after downloading it,
 or view [the static comparison](design/guide-comparison.png). Both files are also
 included in the package artifact; no addon installation is needed to compare.
