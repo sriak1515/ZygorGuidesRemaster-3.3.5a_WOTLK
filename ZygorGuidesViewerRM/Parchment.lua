@@ -287,8 +287,25 @@ function P:DecoratePage(frame,top)
 end
 
 function P:TitleRule(parent)
-    local rule=parent:CreateTexture(nil,"ARTWORK")
-    rule:SetTexture(ZGV.DIR.."\\Skin\\ParchmentRule.tga")
+    local rule=CreateFrame("Frame",nil,parent)
+    rule.ornament=rule:CreateTexture(nil,"ARTWORK")
+    rule.ornament:SetTexture(ZGV.DIR.."\\Skin\\ParchmentRule.tga")
+    rule.ornament:SetTexCoord(56/128,72/128,0,1)
+    rule.ornament:SetSize(16,12)
+    rule.ornament:SetPoint("CENTER",rule,"CENTER",0,0)
+    -- Extend the rules, not the diamond, when either window is resized.
+    for _,side in ipairs({"LEFT","RIGHT"}) do
+        local line=rule:CreateTexture(nil,"ARTWORK")
+        line:SetTexture(white); line:SetVertexColor(0.66,0.54,0.32,0.6)
+        line:SetHeight(1)
+        if side=="LEFT" then
+            line:SetPoint("LEFT",rule,"LEFT",0,0)
+            line:SetPoint("RIGHT",rule.ornament,"LEFT",-3,0)
+        else
+            line:SetPoint("LEFT",rule.ornament,"RIGHT",3,0)
+            line:SetPoint("RIGHT",rule,"RIGHT",0,0)
+        end
+    end
     return rule
 end
 
@@ -453,7 +470,7 @@ function P:Create()
     end)
     frame:HookScript("OnHide",function()
         P:ClearSecureButtons()
-        if P.background then P.background:Hide() end
+        P:CloseBackground()
     end)
     self.events=CreateFrame("Frame")
     self.events:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -465,7 +482,7 @@ end
 -- as optional background. This small API is used by the product fixture, not a
 -- new guide grammar. The reader never sets expandedReading or pauses the engine.
 function P:CloseBackground()
-    if self.background then self.background:Hide() end
+    if self.background then self.background:StopMovingOrSizing(); self.background:Hide() end
 end
 
 function P:ManualNavigate(delta,fast)
@@ -782,7 +799,7 @@ end
 function P:Suspend()
     if not self.active then return end
     self.root:Hide()
-    if self.background then self.background:Hide() end
+    self:CloseBackground()
     self:ClearSecureButtons()
     self.active=false; self.anchored=nil
     self.expandedReading=false;self.readingOrigin=nil;self.contextAnchor=nil;self.actionAnchor=nil

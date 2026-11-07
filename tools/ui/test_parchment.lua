@@ -628,3 +628,11 @@ end
 ZGV.Frame:GetScript("OnHide")()
 assert(not P.background:IsShown(),"hiding the main guide retained the reader")
 print("PASS: reader geometry reconstructs across sessions, reading-size reflow preserves position, and main-guide hide closes the reader")
+P:OpenBackground(reading)
+P.background:SetSize(500,500)
+assert(P.background.rule.ornament:GetWidth()==16 and P.background.rule.ornament:GetHeight()==12,
+    "reader resize stretched the title ornament")
+P.background.grip:GetScript("OnMouseDown")(P.background.grip,"LeftButton")
+assert(P.background.sizing)
+P:CloseBackground()
+assert(not P.background.sizing and not P.background:IsShown(),"reader close left an active resize")
