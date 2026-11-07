@@ -5,7 +5,15 @@ local combat=false
 local Frame={}
 Frame.__index=Frame
 local function new(parent) return setmetatable({parent=parent,w=1,h=1,shown=true,scripts={},scale=1,value=0},Frame) end
-function Frame:SetSize(w,h) assert(w>=0 and h>=0);self.w,self.h=w,h end
+function Frame:SetSize(w,h)
+    assert(w>=0 and h>=0)
+    local changed=self.w~=w or self.h~=h
+    self.w,self.h=w,h
+    if changed and self.scripts.OnSizeChanged then self.scripts.OnSizeChanged(self,w,h) end
+end
+function Frame:StartMoving() self.moving=true end
+function Frame:StartSizing() self.sizing=true end
+function Frame:StopMovingOrSizing() self.moving=false;self.sizing=false end
 function Frame:SetWidth(w) self.w=w end
 function Frame:SetHeight(h) self.h=h end
 function Frame:GetWidth() return self.w end
@@ -539,3 +547,84 @@ for _,geometry in ipairs({{320,380},{340,400},{410,600}}) do
     end
 end
 print("PASS: all six product excerpts fit the 320x380 minimum, 340x400 baseline and larger geometry in approximate frame metrics")
+
+-- A+ reader lifecycle: explicit toggle/manual navigation, automatic progress,
+-- guide replacement even when the current step object is unchanged, and resize.
+ZGV.CurrentGuide=adventureGuide
+ZGV.CurrentStep=adventureGuide.steps[6];ZGV.CurrentStepNum=6
+ZGV:UpdateParchment()
+local reading=ZGV:AdventureFixtureBackground(ZGV.CurrentStep)
+P.backgroundLink:GetScript("OnClick")()
+assert(P.background:IsShown())
+P.backgroundLink:GetScript("OnClick")()
+assert(not P.background:IsShown(),"Read did not toggle the same passage closed")
+P.backgroundLink:GetScript("OnClick")()
+assert(P.background:IsShown())
+local mainWidth,mainHeight=ZGV.Frame:GetWidth(),ZGV.Frame:GetHeight()
+P.background.pane.bar:SetValue(50)
+local beforeResize=P:ScrollAnchor(P.background.pane)
+P.background:SetSize(410,520)
+local afterResize=P:ScrollAnchor(P.background.pane)
+assert(P.background.pane:GetWidth()==378 and P.background.pane:GetHeight()>300)
+if beforeResize and afterResize and P.background.pane.range>0 then
+    assert(math.abs(beforeResize.fraction-afterResize.fraction)<0.001,"resize lost reading anchor")
+end
+assert(ZGV.Frame:GetWidth()==mainWidth and ZGV.Frame:GetHeight()==mainHeight,"reader resized main guide")
+P.background.grip:GetScript("OnMouseUp")()
+assert(preset.readerwidth==410 and preset.readerheight==520 and preset.readerx and preset.readery)
+profile.windowlocked=true;ZGV:UpdateParchment()
+assert(not P.background.grip:IsShown())
+P.background.grip:GetScript("OnMouseDown")(P.background.grip,"LeftButton")
+assert(not P.background.sizing,"lock allowed reader resizing")
+profile.windowlocked=false;ZGV:UpdateParchment()
+P.background.grip:GetScript("OnMouseDown")(P.background.grip,"LeftButton")
+assert(P.background.sizing,"reader resize grip did not start sizing")
+P.background:SetSize(320,300)
+P.background.grip:GetScript("OnMouseUp")()
+assert(P.background.pane:GetBottom()>=P.background:GetBottom(),"minimum reader extends beyond its frame")
+assert(P.background.title:GetBottom()>P.background.pane:GetTop(),"reader title overlaps its text")
+local last=ZGV.CurrentStep.goals[#ZGV.CurrentStep.goals]
+local lastRow=P.action.rows[#ZGV.CurrentStep.goals]
+assert(P.backgroundLink:GetTop()<lastRow:GetBottom(),"Read overlaps the last objective")
+assert(lastRow:GetBottom()-P.backgroundLink:GetTop()<25,"Read remains detached at bottom of the window")
+-- Simulated automatic progression: no manual navigation API is called.
+ZGV.CurrentStep=adventureGuide.steps[5];ZGV.CurrentStepNum=5
+ZGV:UpdateParchment()
+assert(P.background:IsShown() and P.background.entry==reading and not P:ReadingActive())
+local previousSkip=ZGV.SkipStep
+ZGV.SkipStep=function(_,delta,fast) ZGV.manualDelta=delta;ZGV.manualFast=fast end
+P.next:GetScript("OnClick")(P.next,"LeftButton")
+assert(not P.background:IsShown() and ZGV.manualDelta==1,"manual Next did not close reader")
+P:OpenBackground(reading)
+P.prev:GetScript("OnClick")(P.prev,"RightButton")
+assert(not P.background:IsShown() and ZGV.manualDelta==-1 and ZGV.manualFast)
+ZGV.SkipStep=previousSkip
+P:OpenBackground(reading)
+local oldGuide=ZGV.CurrentGuide
+ZGV.CurrentGuide={title="Another guide",steps=oldGuide.steps}
+ZGV:UpdateParchment()
+assert(not P.background:IsShown(),"guide change kept stale reader open")
+ZGV.CurrentGuide=oldGuide;ZGV:UpdateParchment()
+assert(not P.background:IsShown(),"return to a guide unexpectedly reopened reader")
+assert(P.root.paper.texture:find("ParchmentPage.tga",1,true) and P.background.paper.texture==P.root.paper.texture,
+    "guide and reader do not share the bundled A+ paper")
+print("PASS: A+ reader toggle, manual-next/previous closure, automatic-progress retention, guide-change closure, resize/lock/persistence, and adjacent reading link")
+-- Reconstruct the reader as on a new session: saved geometry, closed by default.
+P:CloseBackground()
+local previousReader=P.background
+local expectedWidth,expectedHeight=preset.readerwidth,preset.readerheight
+local expectedX,expectedY=preset.readerx,preset.readery
+P.background=nil
+P:OpenBackground(reading)
+assert(P.background~=previousReader and P.background:GetWidth()==expectedWidth and P.background:GetHeight()==expectedHeight)
+assert(P.background:GetLeft()==expectedX and P.background:GetBottom()==expectedY,"saved reader position was not restored")
+P.background.pane.bar:SetValue(math.min(30,P.background.pane.range))
+local fontAnchor=P:ScrollAnchor(P.background.pane)
+P:SetContextSize(23)
+local reflowed=P:ScrollAnchor(P.background.pane)
+if fontAnchor and reflowed and P.background.pane.range>0 then
+    assert(math.abs(fontAnchor.fraction-reflowed.fraction)<0.001,"reading-size change lost the reader anchor")
+end
+ZGV.Frame:GetScript("OnHide")()
+assert(not P.background:IsShown(),"hiding the main guide retained the reader")
+print("PASS: reader geometry reconstructs across sessions, reading-size reflow preserves position, and main-guide hide closes the reader")

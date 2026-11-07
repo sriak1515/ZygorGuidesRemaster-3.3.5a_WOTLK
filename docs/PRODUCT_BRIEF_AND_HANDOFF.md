@@ -70,25 +70,29 @@ The earlier popout discussion did not settle a separate reader: the prototype de
 
 These are product requirements for rendering and availability, not instructions to invent parser tags now. The existing `|tip`, plain rows, step ordering and optional `|context` metadata provide only part of this contract. Untagged introductions and background are not reliably distinguishable. Keep unknown rows in order. Do not turn every plain paragraph into optional lore.
 
-## Current visual review
+## Current implemented pass: selected A+ parchment
 
-The owner requested a combined hierarchy/appearance comparison before further
-viewer edits. Scene 6 of `/zgadventure` now supplies a representative busy page.
-See [design comparison](DESIGN_COMPARISON.md) and the HTML/PNG in docs/design.
-After the owner found A more stylish and B too plain, the preferred visual reference
-is parchment-refinement.html/png: previous A beside a developed parchment A+.
-Existing addon gold corners/icons are reused; preview grain is illustrative.
-The owner liked A+ and asked for a bolder alternative. journal-comparison.html/png
-now compares A+ against a leather-bound field journal C, still only a preview.
-No choice of C or implementation of either skin has been approved.
-These are browser design mockups, not native rendering or an implemented skin.
-The existing viewer and reader code remain unchanged by this fixture/design pass.
+The owner chose A+ over the field-journal alternative and requested implementation.
+The main guide and separate reader now share bundled paper grain/edge shading,
+inset depth, existing gold borders, and a small title rule. Main window size,
+locale-aware text selection, native objective/navigation interactions and authored
+row order are preserved. Reading links sit below short objective lists rather
+than at the bottom of an otherwise empty page.
 
-Reader feedback to address together after the visual choice: consistent styling,
-less title whitespace, resize support, Read toggling, and closure on guide change.
-Manual-next closure is demonstrated in the mockup; closing on automatic progression
-remains a tradeoff to review. The earlier prototype deliberately retained the
-reader across step changes, which is still its live behavior.
+The reader now resizes independently and saves size/position. Read toggles the
+same passage. Manual Next/Previous, step-browser selection and changing guides
+close it. Automatic progression within the current guide leaves it open. Lock
+prevents reader movement and resizing; hiding the guide or switching viewer mode
+also closes it. No story history or new campaign syntax was added.
+
+[Focused playtest](PARCHMENT_PLAYTEST.md): `/zgadventure 6` for the combined page,
+scene 4 for automatic progression with optional reading open. All 28 Lua 5.1
+scripts pass, covering reader lifecycle, resize/geometry/scroll anchors, the
+normal settings and packaged TGA encoding. Native rendering, skin resemblance,
+secure input and screen-edge layout still need an actual client checkpoint.
+
+Earlier sections below are prototype/design history where they conflict with
+this implemented summary. BUILD.txt in the package identifies the delivered code.
 
 ## Current playable pass: one guide flow
 
@@ -184,13 +188,13 @@ Use synthetic or owner-authorized material and clearly label fixtures. Do not re
 | Requirements reset | Recorded here | Use as current product reference |
 | Compact typography | Implemented; owner says much better | Integrate normal font controls |
 | Essential story in normal flow | Supported for untagged inline rows; experience not fully specified | Test the two-fixture presentation proposal |
-| Optional separate reader | Not implemented | Choose its behavior/ownership using that same walkthrough |
+| Optional separate reader | Implemented with resize/toggle and scoped lifecycle | Client checkpoint on scenes 4 and 6 |
 | Story timing/continuity | Not solved by the placement toggle | Explicit progress states plus fast-progression case |
-| Book/page identity | Owner still sees a frame | Refine after behavior is settled; no larger footprint assumed |
+| Book/page identity | Selected A+ implemented | Native screenshot of paper, title and matching reader |
 | Website/library sharing | Not inspected or implemented | Inspect actual projects when scope is chosen |
 
 Recommended sequence: first make the small behavior walkthrough/fixture plan concrete; then implement that agreed behavior and settings integration; then run one focused client checkpoint. Keep this ledger current. Further skin rounds should not substitute for settling the experience.
 
 ## Starting a fresh session
 
-Read this file first, then inspect the current branch and actual code. Preserve completed work. Treat the owner's requirements above as the product goal, distinguish implemented behavior from proposals, and retain the boundary that guide writing/format belongs to the owner. Use docs/GAMEPLAY_PRESENTATION_AND_RECOVERY.md as the current presentation/progression/recovery proposal, with the concise Iverron sample and Ban’ethil storyboard as content references, before changing UI or parser behavior. Keep its proposed behaviors distinct from the governing requirements. Ask at most the focused question needed by the walkthrough. Do not claim a new reader, font integration or timing model already exists.
+Read this file first, then inspect the current branch and actual code. Preserve completed work. Treat the owner's requirements above as the product goal, distinguish implemented behavior from proposals, and retain the boundary that guide writing/format belongs to the owner. Use docs/GAMEPLAY_PRESENTATION_AND_RECOVERY.md as the current presentation/progression/recovery proposal, with the concise Iverron sample and Ban’ethil storyboard as content references, before changing UI or parser behavior. Keep its proposed behaviors distinct from the governing requirements. Ask at most the focused question needed by the walkthrough. Use the implemented summary above for reader/font status; a general narrative timing model is still not implemented.

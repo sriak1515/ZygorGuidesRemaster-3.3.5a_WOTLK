@@ -1,6 +1,6 @@
 # One-flow guide: focused client checkpoint
 
-This build changes the viewer, not your campaign writing or route. Your uploaded
+This build applies the selected A+ parchment design and reader controls. It changes the viewer, not your campaign writing or route. Your uploaded
 Shadowglen source is not included. The new fixture uses public quest-derived prose
 from the reviewed samples; it is a simulation, not a playable quest route.
 
@@ -15,9 +15,10 @@ INSTALL-AND-TEST.md. Use the Remaster skin and Guide display mode.
    through the rescue excerpts. No character movement, quests, items or timer
    are involved.
 2. In the Ban'ethil introduction, click **Read: Why do the druids sleep?**.
-   Leave it open and click the main action's icon. The live guide moves to Oben's
-   request while the background stays on the passage you opened. Scroll and close
-   the reader; current actions remain available. The final scene stays pending.
+   Click Read again to close it, then reopen it. Drag its lower-right grip to resize.
+   Leave it open and click the main action's icon: automatic progression moves to
+   Oben's request while the reader stays on your passage. Manual Next/Previous or
+   choosing a different guide closes it. The final scene stays pending.
 3. Open **Tools > Settings**. Adjust the normal primary and secondary font sliders,
    then **Reading text size**. Primary controls objective text; secondary controls
    attached directions; reading controls story paragraphs and optional background.
@@ -34,10 +35,19 @@ no need to replay the complete technical fixture list for this checkpoint.
 - Single authored flow is now the default. Ordinary and explicit `|context` rows
   remain visible in source order; essential story cannot be hidden by saved
   Context collapse or the old broad placement preference.
+- A+ now uses bundled paper grain and warm edge shading, inset page depth, a
+  title ornament, and the addon's existing gold edge. The guide and reader share
+  this treatment. Their native fonts and main window footprint are preserved.
 - A small independent reader opens only for an explicitly associated background.
   It does not stop automatic progression. Its content/scroll stays on the selected
   passage as the guide advances, and reopening the same passage retains position
-  within the session. It is movable, screen-clamped, and closes with the guide.
+  within the session. It is movable, screen-clamped, and resizable (minimum 320 x 300).
+  Read toggles the same passage. Manual Next/Previous, step selection, guide
+  changes, leaving parchment mode, and hiding the guide close it. Automatic
+  progression within the same guide leaves it open. Reader size and position
+  persist across reload; the reading window itself starts closed. Lock prevents
+  dragging and resizing. Short objective lists place the Read entry immediately
+  below their content; overflow keeps it in a reachable footer.
 - **Tools > Settings** opens normal settings. Existing primary font choices and
   secondary choices are authoritative, with ranges 7–24 and 5–22. A dedicated
   reading-size control offers 12–24 in increments of one, in both settings views.
@@ -60,32 +70,31 @@ new campaign syntax, broad skin redesign, or real timed-quest simulation is adde
 The six excerpts omit intervening errands deliberately; they demonstrate layout
 and transitions, not event coverage for every quest. `/zgadventure 1` through `6`
 select a scene; `/zgadventure reset` clears only its volatile simulated flags.
-Those flags and reader state reset on reload; real campaign progress is untouched.
+Those flags and the open passage reset on reload; reader geometry persists. Real campaign progress is untouched.
 
 Optional background is attached by the test fixture's explicit provider. It is
 not inferred from plain text or `|context`, and the fixture is never selected as
 a race/class default. Guide selection alone does not open the reader.
 
-All 27 Lua 5.1 regression scripts pass, including real parser/completion checks,
+All 28 Lua 5.1 regression scripts pass, including real parser/completion checks,
 normal option callbacks, row order, reader independence, font migration, and
 approximate minimum/baseline geometry for the product excerpts. Packaging verifies
 the complete ZIP against source. Native rendering, secure input, navigation,
-reader overlap at your resolution, and in-game progression remain untested by
+native texture appearance, reader overlap at your resolution, and in-game progression remain untested by
 the implementation agent.
 
 Rollback: `/zgparchment off` reloads to the native viewer. Back up the previous
 addon folder and SavedVariables for complete rollback.
 
-## Visual comparison before another viewer revision
+## The representative page
 
-`/zgadventure 6` is the representative layout fixture: short essential story,
-three objectives (one completed), two attached directions, and background. It
-uses fixed simulated statuses and stays open for comparison. Existing scene
-indices are unchanged.
+`/zgadventure 6` combines short essential story, three objectives (one completed),
+two attached directions, and optional background. It stays open for inspection;
+existing scene indices are unchanged. Check the A+ material and title rule here,
+then open and resize the reader and confirm the normal font controls still work.
 
-Open guide-comparison.html from the downloaded artifact for two browser mockups
-of the same fixture at 340 x 400, with matching reader treatments. The PNG is a
-static overview. No installation is needed to compare them. The reader toggle,
-resizing, and manual-next closure in that HTML are proposed interactions, not
-changes to the live addon yet. Guide-change closure and automatic-step behavior
-will be settled in the combined viewer revision.
+The HTML/PNG comparisons in the artifact record the design exploration. A+ was
+selected; the field-journal alternative was not. Those browser mockups are not
+screenshots of this native implementation. The paper and title-rule assets used
+by this build are reproducible with tools/ui/build_parchment_assets.cjs and are
+bundled as uncompressed, power-of-two TGA files for the 3.3.5a client.

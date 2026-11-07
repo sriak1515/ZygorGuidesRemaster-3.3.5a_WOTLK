@@ -10,7 +10,7 @@ local light = {0.925, 0.875, 0.749}
 local completedInk = {0.30, 0.32, 0.28} -- grey-olive, readable on opaque paper
 local min, max = math.min, math.max
 local CONTEXT_CHROME = 18
-local TITLE_HEIGHT = 22
+local TITLE_HEIGHT = 30
 local READER_FOOTER = 30
 local MIN_WIDTH, MIN_HEIGHT = 320, 380
 local DEFAULT_WIDTH, DEFAULT_HEIGHT = 340, 400
@@ -187,6 +187,7 @@ function P:SetContextSize(size)
     if size==s.contextsize then return end
     self.contextAnchor=self:ScrollAnchor(self.context)
     self.actionAnchor=self:ScrollAnchor(self.action) -- inline prose shares reading type
+    if self.background then self.background.pane.readingAnchor=self:ScrollAnchor(self.background.pane) end
     s.contextsize=size
     ZGV:UpdateFrame()
 end
@@ -264,6 +265,33 @@ function P:CreatePane(parent)
     return pane
 end
 
+-- Shared A+ material: authored paper texture, inset depth, existing gold edge.
+function P:DecoratePage(frame,top)
+    frame:SetBackdrop({bgFile=white,edgeFile=ZGV.DIR.."\\Skin\\popup_border",edgeSize=16,
+        insets={left=4,right=4,top=4,bottom=4}})
+    frame:SetBackdropColor(0.36,0.30,0.19,1)
+    frame:SetBackdropBorderColor(0.90,0.82,0.62,1)
+    frame.pageEdge=frame:CreateTexture(nil,"BACKGROUND")
+    frame.pageEdge:SetTexture(white); frame.pageEdge:SetVertexColor(0.42,0.33,0.18,1)
+    frame.pageEdge:SetPoint("TOPLEFT",frame,"TOPLEFT",7,-(top-1))
+    frame.pageEdge:SetPoint("BOTTOMRIGHT",frame,"BOTTOMRIGHT",-7,7)
+    frame.paper=frame:CreateTexture(nil,"BORDER")
+    frame.paper:SetTexture(ZGV.DIR.."\\Skin\\ParchmentPage.tga")
+    frame.paper:SetPoint("TOPLEFT",frame,"TOPLEFT",8,-top)
+    frame.paper:SetPoint("BOTTOMRIGHT",frame,"BOTTOMRIGHT",-8,8)
+    -- Keep the fine native gold edge above the paper and child backgrounds.
+    frame.rim=CreateFrame("Frame",nil,frame)
+    frame.rim:SetAllPoints(frame); frame.rim:SetFrameLevel(frame:GetFrameLevel()+20)
+    frame.rim:SetBackdrop({edgeFile=ZGV.DIR.."\\Skin\\popup_border",edgeSize=16})
+    frame.rim:SetBackdropBorderColor(0.90,0.82,0.62,1)
+end
+
+function P:TitleRule(parent)
+    local rule=parent:CreateTexture(nil,"ARTWORK")
+    rule:SetTexture(ZGV.DIR.."\\Skin\\ParchmentRule.tga")
+    return rule
+end
+
 function P:Create()
     if self.root then return end
     local frame = ZGV.Frame
@@ -274,32 +302,7 @@ function P:Create()
     root:SetBackdropColor(0.847,0.788,0.651,1)
     root:SetBackdropBorderColor(0.48,0.40,0.26,1)
     self.root = root
-    -- A continuous paper page inside the metal, without consuming more space.
-    self.pageEdge=root:CreateTexture(nil,"BACKGROUND")
-    self.pageEdge:SetTexture(white)
-    self.pageEdge:SetVertexColor(0.56,0.46,0.30,1)
-    self.pageEdge:SetPoint("TOPLEFT",root,"TOPLEFT",8,-34)
-    self.pageEdge:SetPoint("BOTTOMRIGHT",root,"BOTTOMRIGHT",-8,8)
-    self.pageFace=root:CreateTexture(nil,"BORDER")
-    self.pageFace:SetTexture(white)
-    self.pageFace:SetVertexColor(0.875,0.824,0.706,1)
-    self.pageFace:SetPoint("TOPLEFT",root,"TOPLEFT",9,-35)
-    self.pageFace:SetPoint("BOTTOMRIGHT",root,"BOTTOMRIGHT",-9,9)
-    -- Crop the paper interior of the Wrath quest greeting texture (the native
-    -- material begins below its header). Keep the opaque base for contrast.
-    self.paper=root:CreateTexture(nil,"ARTWORK")
-    self.paper:SetTexture("Interface\\QuestFrame\\UI-QuestGreeting-TopLeft")
-    self.paper:SetTexCoord(0.16,0.90,0.40,0.90)
-    self.paper:SetVertexColor(1,1,1,0.12)
-    self.paper:SetPoint("TOPLEFT",root,"TOPLEFT",10,-36)
-    self.paper:SetPoint("BOTTOMRIGHT",root,"BOTTOMRIGHT",-10,10)
-    -- Wrath's gold dialog rim (also used by its loot frames); keep it above
-    -- children without intercepting input. The center stays quiet parchment.
-    self.rim=CreateFrame("Frame",nil,root)
-    self.rim:SetAllPoints(root)
-    self.rim:SetFrameLevel(root:GetFrameLevel()+20)
-    self.rim:SetBackdrop({edgeFile="Interface\\DialogFrame\\UI-DialogBox-Gold-Border",edgeSize=20})
-    self.rim:SetBackdropBorderColor(0.90,0.84,0.70,1)
+    self:DecoratePage(root,35)
     self.header = CreateFrame("Frame",nil,root)
     self.header:SetBackdrop({bgFile=white})
     self.header:SetBackdropColor(0.16,0.19,0.14,1)
@@ -333,13 +336,12 @@ function P:Create()
         P:SecureButtons()
     end)
     self.chapterPlate=CreateFrame("Frame",nil,self.header)
-    metalButton(self.chapterPlate)
     self.chapter = text(self.chapterPlate,13,{0.890,0.780,0.569})
     self.chapter:SetPoint("TOPLEFT",self.header,"TOPLEFT",8,-7)
     self.chapter:SetHeight(16)
     tooltip(self.header,function() return (self.fullTitle or "Zygor Guides Remaster")..(ZGV.CurrentStep and ZGV.CurrentStep.title and ("\n"..clean(ZGV.CurrentStep.title)) or "") end)
-    self.prev = button(self.header,"<",22,function(_,b) ZGV:SkipStep(-1,b=="RightButton") end)
-    self.next = button(self.header,">",22,function(_,b) ZGV:SkipStep(1,b=="RightButton") end)
+    self.prev = button(self.header,"<",22,function(_,b) P:ManualNavigate(-1,b=="RightButton") end)
+    self.next = button(self.header,">",22,function(_,b) P:ManualNavigate(1,b=="RightButton") end)
     tooltip(self.prev,"Previous step. Right-click: fast backward.")
     tooltip(self.next,"Next / Continue. Right-click: fast forward.")
     self.position = text(self.header,12,light)
@@ -363,7 +365,8 @@ function P:Create()
         if b=="RightButton" then ZGV:ToggleGuideManagerFrame("options") else ZGV:OpenOptions() end
     end)
     self.heading = text(root,16) -- essential titles use readable locale client type
-    self.heading:SetHeight(24)
+    self.heading:SetHeight(22)
+    self.headingRule=self:TitleRule(root)
     self.headingHit=CreateFrame("Frame",nil,root)
     self.headingHit:EnableMouse(true)
     tooltip(self.headingHit,function() return P.stepTitle or "Actions" end)
@@ -371,8 +374,19 @@ function P:Create()
     self.context = self:CreatePane(root)
     self.backgroundLink=button(root,"",300,function()
         local entry=P.backgroundEntry
-        if entry then P:OpenBackground(entry) end
+        if entry then P:ToggleBackground(entry) end
     end)
+    self.backgroundLink.label:ClearAllPoints()
+    self.backgroundLink.label:SetPoint("LEFT",self.backgroundLink,"LEFT",0,0)
+    self.backgroundLink.label:SetHeight(18)
+    self.backgroundLink.label:SetTextColor(0.40,0.27,0.09,1)
+    tooltip(self.backgroundLink,function() return P.backgroundEntry and P.backgroundEntry.title or "Background" end)
+    self.backgroundLink.rule=self.backgroundLink:CreateTexture(nil,"ARTWORK")
+    self.backgroundLink.rule:SetTexture(white); self.backgroundLink.rule:SetVertexColor(0.66,0.54,0.31,0.6)
+    self.backgroundLink.rule:SetHeight(1)
+    self.backgroundLink.rule:SetPoint("TOPLEFT",self.backgroundLink,"TOPLEFT",0,2)
+    self.backgroundLink.rule:SetPoint("TOPRIGHT",self.backgroundLink,"TOPRIGHT",0,2)
+
     self.divider = CreateFrame("Frame",nil,root)
     self.divider:EnableMouse(true)
     self.divider:RegisterForDrag("LeftButton")
@@ -402,12 +416,13 @@ function P:Create()
     self.divider:SetScript("OnDragStop",function() P.splitting=nil end)
     tooltip(self.divider,"Drag to divide Actions and Context. Lock prevents dragging. Click Context to collapse or restore.")
     self.continue = button(root,"Continue >",98,function()
+        P:CloseBackground()
         local confirms=P.confirms or {}
         if #confirms>0 then
             -- Use the actual goal click path, retaining confirm/next branching.
             local proxy={goal=confirms[1],GetParent=function() return {step=ZGV.CurrentStep} end}
             ZGV:GoalOnClick({GetParent=function() return proxy end},"LeftButton")
-        else ZGV:SkipStep(1) end
+        else P:ManualNavigate(1) end
     end)
     tooltip(self.continue,function() return P.confirms and P.confirms[1] and P:GoalText(P.confirms[1]) or "Continue to the next step" end)
     self.readerFooter=CreateFrame("Frame",nil,root)
@@ -449,53 +464,111 @@ end
 -- Explicit authored payload only; neither plain text nor |context is classified
 -- as optional background. This small API is used by the product fixture, not a
 -- new guide grammar. The reader never sets expandedReading or pauses the engine.
+function P:CloseBackground()
+    if self.background then self.background:Hide() end
+end
+
+function P:ManualNavigate(delta,fast)
+    self:CloseBackground()
+    ZGV:SkipStep(delta,fast)
+end
+
+function P:ToggleBackground(entry)
+    local f=self.background
+    if f and f:IsShown() and f.entry==entry and f.ownerGuide==ZGV.CurrentGuide then
+        self:CloseBackground()
+    else self:OpenBackground(entry) end
+end
+
+function P:SaveBackgroundGeometry()
+    local f=self.background
+    local s=self:Settings()
+    s.readerwidth,s.readerheight=f:GetWidth(),f:GetHeight()
+    s.readerx,s.readery=f:GetLeft(),f:GetBottom()
+    f:ClearAllPoints(); f:SetPoint("BOTTOMLEFT",UIParent,"BOTTOMLEFT",s.readerx,s.readery)
+end
+
+function P:LayoutBackground(changed)
+    local f=self.background
+    if not f or not f.entry or f.layingOut then return end
+    f.layingOut=true
+    if not changed and not f.pane.readingAnchor then f.pane.readingAnchor=self:ScrollAnchor(f.pane) end
+    local w,h=f:GetWidth(),f:GetHeight()
+    point(f.header,f,6,5,w-12,29)
+    point(f.caption,f.header,7,7,w-52,18)
+    point(f.close,f.header,w-38,3,22,22)
+    f.title:SetWidth(w-32); f.title:SetHeight(0); f.title:SetText(f.entry.title)
+    local titleHeight=max(22,f.title:GetStringHeight())
+    point(f.title,f,16,44,w-32,titleHeight)
+    point(f.rule,f,16,44+titleHeight+1,w-32,8)
+    local top=44+titleHeight+16
+    local height=max(1,h-top-20)
+    point(f.pane,f,16,top,w-32,height)
+    point(f.grip,f,w-23,h-19,18,16)
+    setShown(f.grip,not ZGV.db.profile.windowlocked)
+    self:Fill(f.pane,{f.goal},w-32,height,nil,changed)
+    -- Reference prose never participates in native goal completion/clicks.
+    local clicker=f.pane.rows[1].clicker
+    clicker:SetScript("OnClick",nil); clicker:SetScript("OnEnter",nil)
+    clicker:SetScript("OnLeave",nil); clicker:EnableMouse(false)
+    f.layingOut=nil
+end
+
 function P:OpenBackground(entry)
     if not entry or type(entry.title)~="string" or type(entry.body)~="string" then return end
     if not self.background then
         local f=CreateFrame("Frame",nil,UIParent)
-        f:SetSize(340,400); f:SetFrameStrata("DIALOG")
-        f:SetClampedToScreen(true); f:SetMovable(true); f:EnableMouse(true)
-        f:SetBackdrop({bgFile=white,edgeFile=ZGV.DIR.."\\Skin\\popup_border",edgeSize=10,
-            insets={left=6,right=6,top=6,bottom=6}})
-        f:SetBackdropColor(0.875,0.824,0.706,1)
+        local settings=self:Settings()
+        f:SetSize(max(320,tonumber(settings.readerwidth) or 340),max(300,tonumber(settings.readerheight) or 400))
+        f:SetFrameStrata("DIALOG"); f:SetClampedToScreen(true)
+        f:SetMovable(true); f:SetResizable(true); f:SetMinResize(320,300); f:EnableMouse(true)
+        self:DecoratePage(f,35)
         f.header=CreateFrame("Frame",nil,f)
-        point(f.header,f,8,8,324,46)
+        f.header:SetBackdrop({bgFile=white})
+        f.header:SetBackdropColor(0.16,0.19,0.14,1)
         f.header:EnableMouse(true); f.header:RegisterForDrag("LeftButton")
         f.header:SetScript("OnDragStart",function() if not ZGV.db.profile.windowlocked then f:StartMoving() end end)
-        f.header:SetScript("OnDragStop",function() f:StopMovingOrSizing() end)
-        f.title=text(f.header,14); point(f.title,f.header,4,2,280,40)
-        f.close=button(f.header,"X",24,function() f:Hide() end)
-        point(f.close,f.header,294,0,24,24)
+        f.header:SetScript("OnDragStop",function() f:StopMovingOrSizing(); P:SaveBackgroundGeometry() end)
+        f.caption=text(f.header,12,light); f.caption:SetText("Background")
+        f.close=button(f.header,"X",22,function() P:CloseBackground() end)
+        f.close.label:SetTextColor(unpack(light)); metalButton(f.close,true)
+        f.title=text(f,18)
+        f.rule=self:TitleRule(f)
         f.pane=self:CreatePane(f); f.pane.reading=true
-        point(f.pane,f,12,58,316,328)
         f.pane.bar:SetPoint("TOPRIGHT",f.pane,"TOPRIGHT",0,0)
         f.pane.bar:SetPoint("BOTTOMRIGHT",f.pane,"BOTTOMRIGHT",0,0)
+        f.grip=button(f,"/",18,function() end)
+        f.grip:SetScript("OnMouseDown",function(_,b)
+            if b=="LeftButton" and not ZGV.db.profile.windowlocked then f:StartSizing("BOTTOMRIGHT") end
+        end)
+        f.grip:SetScript("OnMouseUp",function()
+            f:StopMovingOrSizing(); P:SaveBackgroundGeometry(); P:LayoutBackground()
+        end)
+        f:SetScript("OnSizeChanged",function() P:LayoutBackground() end)
         self.background=f
     end
     local f=self.background
-    local changed=f.entry~=entry
+    local changed=f.entry~=entry or f.ownerGuide~=ZGV.CurrentGuide
     if changed then
-        f.entry=entry
+        f.entry=entry; f.ownerGuide=ZGV.CurrentGuide; f.pane.readingAnchor=nil
         f.goal={text=entry.body,GetStatus=function() return "passive" end}
         function f.goal:GetText() return self.text end
     end
+    f:SetScale(ZGV.db.profile.framescale or 1)
     if not f.placed then
-        f:SetScale(ZGV.db.profile.framescale or 1)
-        local scale=ZGV.Frame:GetEffectiveScale()
-        local right=(ZGV.Frame:GetLeft()+ZGV.Frame:GetWidth()+352)*scale
-        if right>UIParent:GetWidth()*UIParent:GetEffectiveScale() then
-            f:SetPoint("TOPRIGHT",ZGV.Frame,"TOPLEFT",-12,0)
+        local settings=self:Settings()
+        if settings.readerx and settings.readery then
+            f:SetPoint("BOTTOMLEFT",UIParent,"BOTTOMLEFT",settings.readerx,settings.readery)
         else
-            f:SetPoint("TOPLEFT",ZGV.Frame,"TOPRIGHT",12,0)
+            local scale=ZGV.Frame:GetEffectiveScale()
+            local right=(ZGV.Frame:GetLeft()+ZGV.Frame:GetWidth()+f:GetWidth()+12)*scale
+            if right>UIParent:GetWidth()*UIParent:GetEffectiveScale() then
+                f:SetPoint("TOPRIGHT",ZGV.Frame,"TOPLEFT",-12,0)
+            else f:SetPoint("TOPLEFT",ZGV.Frame,"TOPRIGHT",12,0) end
         end
         f.placed=true
     end
-    f.title:SetText(entry.title); f:Show()
-    self:Fill(f.pane,{f.goal},316,328,nil,changed)
-    -- Background is passive reference, never a native goal click target.
-    local clicker=f.pane.rows[1].clicker
-    clicker:SetScript("OnClick",nil); clicker:SetScript("OnEnter",nil)
-    clicker:SetScript("OnLeave",nil); clicker:EnableMouse(false)
+    f:Show(); self:LayoutBackground(changed)
 end
 
 function P:ClearSecureButtons()
@@ -683,11 +756,12 @@ function P:Fill(pane,goals,width,height,step,newStep)
     for i=#goals+1,#pane.rows do
         pane.rows[i].goal=nil; pane.rows[i].inlineActionSpec=nil; pane.rows[i]:Hide()
     end
+    pane.contentBottom=bottom+4
     pane.child:SetHeight(max(height,bottom+4))
     pane.range=max(0,bottom+4-height)
     pane.bar:SetMinMaxValues(0,pane.range)
     local value=pane.bar:GetValue() or 0
-    local anchor=reading and self.contextAnchor or (not reading and self.actionAnchor)
+    local anchor=pane.readingAnchor or (pane==self.context and self.contextAnchor) or (pane==self.action and self.actionAnchor)
     if anchor then
         value=anchor.value
         for i,goal in ipairs(goals) do
@@ -697,7 +771,8 @@ function P:Fill(pane,goals,width,height,step,newStep)
                 break
             end
         end
-        if reading then self.contextAnchor=nil else self.actionAnchor=nil end
+        if pane==self.context then self.contextAnchor=nil elseif pane==self.action then self.actionAnchor=nil end
+        pane.readingAnchor=nil
     end
     pane.bar:SetValue(newStep and 0 or clamp(value,0,pane.range))
     pane:SetVerticalScroll(pane.bar:GetValue())
@@ -742,6 +817,7 @@ function ZGV:UpdateParchment()
     end
     local w,h=frame:GetWidth(),frame:GetHeight()
     local step=self.CurrentStep
+    if P.background and P.background.ownerGuide~=self.CurrentGuide then P:CloseBackground() end
     local newStep=P.step~=step or P.guide~=self.CurrentGuide
     if newStep then
         P.browsing=false;P.expandedReading=false;P.readingOrigin=nil;P.contextAnchor=nil;P.actionAnchor=nil
@@ -790,6 +866,8 @@ function ZGV:UpdateParchment()
     setShown(P.headingHit,titleHeight>0)
     fitLabel(P.heading,P.stepTitle,w-24)
     point(P.headingHit,P.root,12,top,w-24,titleHeight)
+    point(P.headingRule,P.root,12,top+21,w-24,8)
+    setShown(P.headingRule,titleHeight>0)
     setShown(P.continue,story)
     point(P.continue,P.root,w-118,h-35,98,22)
     point(P.readerFooter,P.root,12,h-READER_FOOTER-10,w-24,READER_FOOTER)
@@ -835,6 +913,10 @@ function ZGV:UpdateParchment()
         P:Fill(P.action,actions,w-24,max(1,ah),step,newStep or P.wasBrowsing)
         P:Fill(P.context,context,w-24,max(1,ch),step,newStep)
         P.wasBrowsing=nil
+        if background and s.layout~="split" then
+            local linkY=min(h-38,paneTop+(P.action.contentBottom or ah)+6)
+            point(P.backgroundLink,P.root,12,linkY,w-38,24)
+        end
     end
     point(P.grip,P.root,w-19,h-13,16,12)
     setShown(P.grip,not self.db.profile.windowlocked)
@@ -863,6 +945,7 @@ function P:Browse(width,top,height)
     for i,goal in ipairs(rows) do
         self.action.rows[i].clicker:SetScript("OnClick",function()
             if ZGV.CurrentGuide.steps[goal.browse]:AreRequirementsMet() then
+                self:CloseBackground()
                 self.browsing=false;ZGV.pause=true;ZGV:FocusStep(goal.browse)
             end
         end)
@@ -905,6 +988,7 @@ function ZGV:ParchmentTick(elapsed)
     local scale,left,bottom=self.Frame:GetEffectiveScale(),self.Frame:GetLeft(),self.Frame:GetBottom()
     if self.framemoving or scale~=P.lastScale or left~=P.lastLeft or bottom~=P.lastBottom then
         P:SecureButtons()
+        if P.background then P.background:SetScale(self.db.profile.framescale or 1) end
         P.lastScale,P.lastLeft,P.lastBottom=scale,left,bottom
     end
     if self.fastforward then

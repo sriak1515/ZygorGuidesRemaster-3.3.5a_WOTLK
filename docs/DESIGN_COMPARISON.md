@@ -1,6 +1,9 @@
 # Guide hierarchy and appearance comparison
 
-Review material, 7 November 2026. No new live skin or reader behavior in this pass.
+Review material, 7 November 2026. The owner selected A+ and requested implementation.
+A+ paper/gold/title treatment and reader resize/toggle/lifecycle are now in the
+addon; see PARCHMENT_PLAYTEST.md. The images below remain browser design studies,
+not native screenshots. Earlier statements about previews alone are historical.
 
 ## Bolder alternative: a field journal
 
