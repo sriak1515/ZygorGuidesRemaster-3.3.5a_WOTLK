@@ -8,7 +8,7 @@ assert(loadfile(root.."/Guides/Tests/AdventureFixture.lua"))()
 assert(#ZGV.registeredguides==before+1)
 local entry=ZGV.registeredguides[#ZGV.registeredguides]
 local guide=assert(ZGV:ParseEntry(entry.raw));guide.title=entry.title
-assert(#guide.steps==5 and not guide.defaultfor and not guide.next)
+assert(#guide.steps==6 and not guide.defaultfor and not guide.next)
 ZGV.CurrentGuide=guide
 for i,step in ipairs(guide.steps) do
     ZGV.CurrentStep,ZGV.CurrentStepNum=step,i
@@ -23,7 +23,7 @@ for i,step in ipairs(guide.steps) do
         ZGV:AdventureFixtureComplete(i)
         assert(g:GetStatus()=="complete" and step:IsComplete(),"native step did not complete after event")
     end
-    assert((ZGV:AdventureFixtureBackground(step)~=nil)==(i==4),"background appeared on an unrelated scene")
+    assert((ZGV:AdventureFixtureBackground(step)~=nil)==(i==4 or i==6),"background appeared on an unrelated scene")
 end
 local refreshes=ZGV.refreshes
 ZGV.CurrentStepNum=5
@@ -31,4 +31,9 @@ ZGV:AdventureFixtureComplete(1)
 assert(ZGV.refreshes==refreshes,"stale fixture action changed the current scene")
 ZGV.AdventureFixtureFlags={}
 assert(not guide.steps[3]:IsComplete(),"reset retained rescue completion")
-print("PASS: five adventure excerpts parse, gate native completion on isolated events, and attach background only to its authored scene")
+print("PASS: six adventure excerpts parse, gate native completion on isolated events, and attach background only to its authored scene")
+
+local combined=guide.steps[6]
+assert(#combined.goals==4 and combined.goals[2]:GetStatus()=="complete")
+assert(combined.goals[3]:GetStatus()=="incomplete" and combined.goals[4]:GetStatus()=="incomplete")
+assert(combined.goals[3].tooltip and combined.goals[4].tooltip)

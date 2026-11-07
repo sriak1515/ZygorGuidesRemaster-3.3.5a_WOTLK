@@ -8,7 +8,7 @@ ZGV.AdventureFixtureFlags={}
 local background={title="Why do the druids sleep?",body="The slumber beneath Ban'ethil belongs to an ancient bargain. After the War of the Ancients, Ysera linked Nordrassil, the World Tree at Mount Hyjal, to her realm: the Emerald Dream. The night elf druids agreed to sleep for centuries while their spirits travelled its paths.\n\nTheir hibernation was a commitment, not simply a long rest. While their spirits journeyed beyond the waking world, their bodies remained behind. Protectors such as Gaerolas kept watch over the sleepers.\n\nThat is the duty behind Athridas's concern. The missing report comes from someone entrusted with people who cannot simply rise to defend themselves."}
 function ZGV:AdventureFixtureBackground(step)
     local guide=self.CurrentGuide
-    if guide and guide.title==TITLE and guide.steps and step==guide.steps[4] then return background end
+    if guide and guide.title==TITLE and guide.steps and (step==guide.steps[4] or step==guide.steps[6]) then return background end
 end
 function ZGV:AdventureFixtureComplete(index)
     -- An old test button must not mutate another guide or a different scene.
@@ -20,8 +20,8 @@ SLASH_ZGVADVENTURE1="/zgadventure"
 SlashCmdList.ZGVADVENTURE=function(value)
     local text=(value or ""):match("^%s*(.-)%s*$"):lower()
     local n=(text=="" or text=="reset") and 1 or tonumber(text)
-    if not n or n~=math.floor(n) or n<1 or n>5 then
-        ZGV:Print("/zgadventure [1-5|reset]: simulated walkthrough; return through Guides > Recent.")
+    if not n or n~=math.floor(n) or n<1 or n>6 then
+        ZGV:Print("/zgadventure [1-6|reset]: simulated walkthrough; return through Guides > Recent.")
         return
     end
     ZGV.AdventureFixtureFlags={}
@@ -35,7 +35,7 @@ ZGV:RegisterGuide(TITLE,[[
 author Zygor Remaster prototype
 type leveling
 startlevel 1
-description Simulated product walkthrough. Select /zgadventure. Click the action icon to simulate each event; automatic guide progression stays native. No real quest, timer, movement, item or reward. Scenes 1-3 show Iverron; scenes 4-5 show optional Ban'ethil reading. These are excerpts, not a playable route.
+description Simulated product walkthrough. Select /zgadventure. Click the action icon to simulate each event; automatic guide progression stays native. No real quest, timer, movement, item or reward. Scenes 1-3 show Iverron; scenes 4-5 show optional Ban'ethil reading. Scene 6 combines story, three objectives, directions and background for layout review. These are excerpts, not a playable route.
 step
 title Iverron: a missing friend
 .'Iverron usually visits Dirania every day, but today he is several hours late. He often explores near the northern cave, where spiders gather. She asks you to look for him.
@@ -56,4 +56,10 @@ step
 title Ban'ethil: Oben's request
 .'Oben's spirit is trapped in the Emerald Dream. The Gnarlpine shamans have taken control of his sleeping body and use it to attack intruders. Bring him one of their charms so he can examine the enchantment.
 .'Collect a Shaman Voodoo Charm (0/1). |tip Defeat Gnarlpine Shamans in the next room. |condition false, true
+step
+title Ban'ethil: relics of wakening
+.'Athridas needs four sacred relics to prepare the sleeping druids' awakening. Search the chests within Ban'ethil and bring the relics back to him.
+.'Black Feather Quill (1/1). |condition true, true
+.'Collect the Rune of Nesting (0/1). |tip Upper floor: cross the middle bridge. The chest is on the right in the small room. |condition false, true
+.'Collect the Raven Claw Talisman (0/1). |tip At the bottom of the den, cross the bridge to the chest on the ledge. |condition false, true
 ]])

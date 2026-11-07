@@ -57,8 +57,8 @@ no need to replay the complete technical fixture list for this checkpoint.
 
 No Recent story/history, reader integration with Azeroth Library, parser redesign,
 new campaign syntax, broad skin redesign, or real timed-quest simulation is added.
-The five excerpts omit intervening errands deliberately; they demonstrate layout
-and transitions, not event coverage for every quest. `/zgadventure 1` through `5`
+The six excerpts omit intervening errands deliberately; they demonstrate layout
+and transitions, not event coverage for every quest. `/zgadventure 1` through `6`
 select a scene; `/zgadventure reset` clears only its volatile simulated flags.
 Those flags and reader state reset on reload; real campaign progress is untouched.
 
@@ -75,3 +75,17 @@ the implementation agent.
 
 Rollback: `/zgparchment off` reloads to the native viewer. Back up the previous
 addon folder and SavedVariables for complete rollback.
+
+## Visual comparison before another viewer revision
+
+`/zgadventure 6` is the representative layout fixture: short essential story,
+three objectives (one completed), two attached directions, and background. It
+uses fixed simulated statuses and stays open for comparison. Existing scene
+indices are unchanged.
+
+Open guide-comparison.html from the downloaded artifact for two browser mockups
+of the same fixture at 340 x 400, with matching reader treatments. The PNG is a
+static overview. No installation is needed to compare them. The reader toggle,
+resizing, and manual-next closure in that HTML are proposed interactions, not
+changes to the live addon yet. Guide-change closure and automatic-step behavior
+will be settled in the combined viewer revision.

@@ -533,9 +533,9 @@ for _,geometry in ipairs({{320,380},{340,400},{410,600}}) do
         assert(P.action:IsShown() and not P.context:IsShown())
         assert(P.action.range==0,"product excerpt requires scrolling at compact baseline")
         assert(P.action.rows[2].goal==step.goals[2])
-        assert(P.backgroundLink:IsShown()==(i==4))
+        assert(P.backgroundLink:IsShown()==(i==4 or i==6))
         local bottom=P.action.rows[2]:GetBottom()
         assert(bottom>=P.action:GetBottom(),"product action clipped by viewport")
     end
 end
-print("PASS: all five product excerpts fit the 320x380 minimum, 340x400 baseline and larger geometry in approximate frame metrics")
+print("PASS: all six product excerpts fit the 320x380 minimum, 340x400 baseline and larger geometry in approximate frame metrics")

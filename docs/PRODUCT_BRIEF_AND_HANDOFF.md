@@ -70,6 +70,20 @@ The earlier popout discussion did not settle a separate reader: the prototype de
 
 These are product requirements for rendering and availability, not instructions to invent parser tags now. The existing `|tip`, plain rows, step ordering and optional `|context` metadata provide only part of this contract. Untagged introductions and background are not reliably distinguishable. Keep unknown rows in order. Do not turn every plain paragraph into optional lore.
 
+## Current visual review
+
+The owner requested a combined hierarchy/appearance comparison before further
+viewer edits. Scene 6 of `/zgadventure` now supplies a representative busy page.
+See [design comparison](DESIGN_COMPARISON.md) and the HTML/PNG in docs/design.
+These are browser design mockups, not native rendering or an implemented skin.
+The existing viewer and reader code remain unchanged by this fixture/design pass.
+
+Reader feedback to address together after the visual choice: consistent styling,
+less title whitespace, resize support, Read toggling, and closure on guide change.
+Manual-next closure is demonstrated in the mockup; closing on automatic progression
+remains a tradeoff to review. The earlier prototype deliberately retained the
+reader across step changes, which is still its live behavior.
+
 ## Current playable pass: one guide flow
 
 Following the owner's request to simplify and implement a coherent playable pass,
