@@ -75,9 +75,12 @@ These are product requirements for rendering and availability, not instructions 
 The owner requested a combined hierarchy/appearance comparison before further
 viewer edits. Scene 6 of `/zgadventure` now supplies a representative busy page.
 See [design comparison](DESIGN_COMPARISON.md) and the HTML/PNG in docs/design.
-After the owner found A more stylish and B too plain, the current visual reference
+After the owner found A more stylish and B too plain, the preferred visual reference
 is parchment-refinement.html/png: previous A beside a developed parchment A+.
 Existing addon gold corners/icons are reused; preview grain is illustrative.
+The owner liked A+ and asked for a bolder alternative. journal-comparison.html/png
+now compares A+ against a leather-bound field journal C, still only a preview.
+No choice of C or implementation of either skin has been approved.
 These are browser design mockups, not native rendering or an implemented skin.
 The existing viewer and reader code remain unchanged by this fixture/design pass.
 

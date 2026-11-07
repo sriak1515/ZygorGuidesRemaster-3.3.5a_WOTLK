@@ -2,6 +2,22 @@
 
 Review material, 7 November 2026. No new live skin or reader behavior in this pass.
 
+## Bolder alternative: a field journal
+
+After liking A+, the owner requested one more adventurous comparison. See
+[journal-comparison.html](design/journal-comparison.html) and its
+[static overview](design/journal-comparison.png): A+ alongside C, a stitched
+leather-bound field journal with a chapter ribbon and a loose-sheet reader.
+A+ remains the current favoured reference; C is an alternative for review.
+
+Both use the identical fixture and text sizes at 340 x 400. The binding consumes
+some reading width, so C wraps the introduction onto an additional line. The
+representative guide still fits without scrolling. Paper, leather, stitching,
+and ribbon are illustrative browser materials; existing addon icons are reused.
+The ribbon is decoration, not a new feature or chapter-navigation commitment.
+Native client materials and behavior remain unimplemented by these previews.
+Browser checks passed for sizes, guide fit, toggle, resize and manual-next closure.
+
 ## Current comparison: A and developed A
 
 The owner found A more stylish and B too plain to communicate parchment. The
