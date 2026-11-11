@@ -13,6 +13,7 @@ function Frame:Hide() self.shown=false end
 function Frame:IsShown() return self.shown end
 function Frame:IsVisible() return self.shown and (not self.parent or self.parent:IsVisible()) end
 function Frame:GetAlpha() return self.alpha end
+function Frame:GetName() return self.name end
 function Frame:GetChildren() return unpack(self.children) end
 function Frame:SetScript(k,v) self.scripts[k]=v end
 function Frame:SetSize(w,h) self.w,self.h=w,h end
@@ -24,7 +25,25 @@ function Frame:GetStringHeight() return #(self.text or "") end
 function Frame:CreateFontString() return frame(self) end
 for _,k in ipairs({"SetAllPoints","SetBackdrop","SetBackdropColor","EnableMouse","SetPoint","SetScrollChild","SetJustifyH","RegisterEvent"}) do Frame[k]=function() end end
 UIParent=frame()
-CreateFrame=function(_,_,parent) return frame(parent) end
+local namedFrames={}
+CreateFrame=function(kind,name,parent,template)
+    local f=frame(parent)
+    f.name=name
+    if name then
+        assert(not namedFrames[name],"duplicate frame name: "..name)
+        namedFrames[name]=f
+    end
+    if template=="UIPanelScrollFrameTemplate" then
+        -- Wrath ScrollFrame_OnLoad concatenates GetName() with child suffixes.
+        -- The old anonymous construction must fail here, as in the client trace.
+        local scrollbarName=f:GetName().."ScrollBar"
+        assert(not namedFrames[scrollbarName],"duplicate scrollbar name")
+        namedFrames[scrollbarName]=frame(f)
+    end
+    return f
+end
+-- Prove the double models the reported template failure, independently of UI.
+assert(not pcall(CreateFrame,"ScrollFrame",nil,UIParent,"UIPanelScrollFrameTemplate"))
 SlashCmdList={}
 local combat=false
 InCombatLockdown=function() return combat end
@@ -120,7 +139,7 @@ ZGV.SkipStep=function() error("fixture called real SkipStep") end
 ZGV.SetGuide=function() error("fixture selected a guide") end
 for _,order in ipairs({{1,2,3,4,5},{5,4,2,1,3}}) do
     P:Start("fixture")
-    assert(visual:IsShown())
+    assert(visual:IsShown() and P.mode=="fixture" and P.panel)
     for _,i in ipairs(order) do P:FixtureCommand("goal "..i) end
     for _,g in ipairs(P:Snapshot().goals) do assert(g.status=="complete") end
     assert(not P:Snapshot().story,"objective progress must not earn story")

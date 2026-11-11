@@ -23,7 +23,10 @@ function P:CreatePanel(parent)
     panel:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",edgeSize=12,insets={left=3,right=3,top=3,bottom=3}})
     panel:SetBackdropColor(0.06,0.07,0.08,1)
     panel:EnableMouse(true)
-    local scroll=CreateFrame("ScrollFrame",nil,panel,"UIPanelScrollFrameTemplate")
+    -- Wrath's template OnLoad looks up children via GetName().."ScrollBar".
+    -- Give each activation a unique name; WoW frames survive Hide()/fallback.
+    self.panelSerial=(self.panelSerial or 0)+1
+    local scroll=CreateFrame("ScrollFrame","ZGVPresentationPOCScroll"..self.panelSerial,panel,"UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT",12,-12);scroll:SetPoint("BOTTOMRIGHT",-30,42)
     local content=CreateFrame("Frame",nil,scroll)
     content:SetSize(math.max(100,parent:GetWidth()-50),1)

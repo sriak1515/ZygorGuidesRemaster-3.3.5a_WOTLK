@@ -119,7 +119,7 @@ selection contract. No cross-step aggregator or guide edits are included here.
 | Static | All top-level addon Lua parses under installed native Lua 5.1; existing BOMs stripped in memory as in the repository checker. TOC/XML adapter loading order and single inclusion verified. `git diff --check` passed. |
 | Simulated | **29/29** repository Lua test scripts pass, including the new presentation test and existing parser, goal, navigation, guide and UI regressions. Frame and goal doubles do not model WoW's secure execution or real quest events. |
 | New simulation coverage | Detached snapshot and listener copies; authored label and goal IDs; objective and waypoint notifications; unchanged-data deduplication; actual source-extracted `TryToCompleteStep`, `FocusStep`, `FocusStepQuiet`, `SkipStep`; actual renderer dispatch guards; hidden/alpha guard failure; visible experimental auto-advance and persistence; manual Previous/Next and waypoint calls; two objective orders; story independent from objective completion; fixture commands never invoke SetGuide/SkipStep or change native guide/step/db; switching, combat-deferred fallback; evaluator/listener failure recovery; module reinitialization discards mode/fixture. |
-| Real client | **NOT RUN.** No usable WoW/Wine executable, WoW/Wine process or connected controlled WoW test environment identified in this session. Actual 3.3.5a quest-log updates, automatic progression, pointer routing/arrival, secure buttons/combat, visual layout, logout/reload persistence and native fallback remain unverified. |
+| Real client | **User-reported fixture startup FAILURE** on the initial PoC; see follow-up below. No agent-accessible WoW client environment was identified. Corrected startup, actual quest-log updates, automatic progression, pointer routing/arrival, secure buttons/combat, visual layout, logout/reload persistence and native fallback remain unverified. |
 
 The existing Python/Lupa checker could not run because Lupa is absent. The new
 dependency-free runner executes the same repository Lua test scripts using
@@ -172,3 +172,29 @@ test character. Then author one bounded concurrent-goal test step using supporte
 syntax, without changing campaign story. Only after those gates should this
 versioned projection feed the already-established vertical design. Live earned-story
 markers, persistent presentation history and any journal remain separate work.
+
+## Client startup correction — 2026-11-11
+
+The user reported `/zgpoc fixture` failing at 17:04:18 in
+`UIPanelTemplates.lua:255` / `ScrollFrame_OnLoad`, called by
+`PresentationUI.lua:26`. This is actual client evidence of a **failed initial
+fixture startup**, not a passed client test. The addon list/client report does
+not establish which character or installation was used; no assumption is made.
+
+The PoC created an anonymous frame inheriting `UIPanelScrollFrameTemplate`.
+Wrath's template expects a frame name when resolving its scrollbar children.
+`PresentationUI.lua` now supplies a unique `ZGVPresentationPOCScroll<N>` name
+for each activation, avoiding reuse of frame names after fallback/switching.
+No progression, quest state or persistence behavior was changed.
+
+The frame double now models the template's name concatenation and rejects
+reused names. It reproduced the initial error before the production fix, then
+passed with the fix, including repeated live/fixture switches. All 29 repository
+Lua scripts and static checks passed again. **The correction has not been
+verified in the actual client.**
+
+For a narrow retest in the isolated test setup, update `PresentationUI.lua` from
+the commit containing this correction, `/reload`, then `/zgpoc fixture`. Verify
+that the panel opens without the reported error. Exit with `/zgpoc off`, reopen
+once to check repeated activation, and exit again. Stop there if another error
+appears; no story replay or real quest action is required for this startup test.
