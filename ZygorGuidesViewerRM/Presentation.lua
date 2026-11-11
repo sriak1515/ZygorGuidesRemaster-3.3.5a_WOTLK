@@ -24,6 +24,10 @@ function ZGV:GetPresentationSnapshot()
         if status~="hidden" then
             snapshot.goals[#snapshot.goals+1]={index=i,action=goal.action,questId=goal.questid,
                 objective=goal.objnum,text=goal:GetText(),status=status,progress=progress,
+                -- Only explicit, passive authored context may leave the main flow.
+                -- Unknown prose and interactive rows retain their original order.
+                role=goal.context and self.Parchment and self.Parchment:IsPlain(goal) and "context" or "objective",
+                hint=goal.tooltip or goal.routesharedtip,
                 routeGroup=goal.routegroup and true or false,
                 map=goal.map,x=goal.x,y=goal.y}
         end

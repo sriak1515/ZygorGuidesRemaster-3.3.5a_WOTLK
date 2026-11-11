@@ -17,14 +17,37 @@ function Frame:GetName() return self.name end
 function Frame:GetChildren() return unpack(self.children) end
 function Frame:SetScript(k,v) self.scripts[k]=v end
 function Frame:SetSize(w,h) self.w,self.h=w,h end
-function Frame:GetWidth() return self.w end
+function Frame:GetWidth() return self.allpoints and self.parent:GetWidth() or self.w end
 function Frame:SetWidth(w) self.w=w end
 function Frame:SetHeight(h) self.h=h end
 function Frame:SetText(s) self.text=s end
-function Frame:GetStringHeight() return #(self.text or "") end
+function Frame:GetHeight() return self.allpoints and self.parent:GetHeight() or self.h end
+function Frame:GetStringHeight()
+    return math.max(1,math.ceil(#(self.text or "")/math.max(1,self:GetWidth()/((self.fontsize or 13)*0.5))))*(self.fontsize or 13)*1.4
+end
+function Frame:SetFont(font,size) self.font,self.fontsize=font,size;return true end
+function Frame:GetFont() return self.font or "test-font",self.fontsize or 13 end
+function Frame:GetFrameLevel() return 1 end
+function Frame:GetEffectiveScale() return 1 end
+function Frame:GetLeft() return self.left or 900 end
+function Frame:CreateTexture() return frame(self) end
+function Frame:SetAllPoints() self.allpoints=true end
+function Frame:SetMinMaxValues(lo,hi) self.lo,self.hi=lo,hi end
+function Frame:SetValue(value)
+    self.value=value
+    if self.scrollOwner then self.scrollOwner:SetVerticalScroll(value) end
+end
+function Frame:SetVerticalScroll(value)
+    self.offset=value
+    if self.scripts.OnVerticalScroll then self.scripts.OnVerticalScroll(self,value) end
+end
 function Frame:CreateFontString() return frame(self) end
-for _,k in ipairs({"SetAllPoints","SetBackdrop","SetBackdropColor","EnableMouse","SetPoint","SetScrollChild","SetJustifyH","RegisterEvent"}) do Frame[k]=function() end end
+function Frame:SetPoint(...) self.point={...} end
+function Frame:ClearAllPoints() self.point=nil end
+for _,k in ipairs({"SetTexCoord","SetFrameLevel","SetAlpha","SetBackdropBorderColor","SetHighlightTexture","SetTexture","SetClampedToScreen","EnableMouseWheel","UpdateScrollChildRect","SetTextColor","SetJustifyV","SetSpacing","SetBackdrop","SetBackdropColor","EnableMouse","SetScrollChild","SetJustifyH","RegisterEvent"}) do Frame[k]=function() end end
 UIParent=frame()
+UIParent:SetSize(1920,1080)
+STANDARD_TEXT_FONT="test-font"
 local namedFrames={}
 CreateFrame=function(kind,name,parent,template)
     local f=frame(parent)
@@ -39,6 +62,8 @@ CreateFrame=function(kind,name,parent,template)
         local scrollbarName=f:GetName().."ScrollBar"
         assert(not namedFrames[scrollbarName],"duplicate scrollbar name")
         namedFrames[scrollbarName]=frame(f)
+        namedFrames[scrollbarName].scrollOwner=f
+        _G[scrollbarName]=namedFrames[scrollbarName]
     end
     return f
 end
@@ -47,7 +72,7 @@ assert(not pcall(CreateFrame,"ScrollFrame",nil,UIParent,"UIPanelScrollFrameTempl
 SlashCmdList={}
 local combat=false
 InCombatLockdown=function() return combat end
-local ZGV={Frame=frame(UIParent),db={char={guides_history={},guide_progress={}},profile={guidesinhistory=5}},
+local ZGV={DIR="test-addon",Frame=frame(UIParent),db={char={guides_history={},guide_progress={}},profile={guidesinhistory=5}},
     LastSkip=1,frameNeedsResizing=0,CurrentGuideName="test-guide",CurrentStepNum=1,completionelapsed=10,completioninterval=0.1,
     completionintervallong=0.5,completionintervalmin=0.01,recentlyCompletedGoals={}}
 ZygorGuidesViewer=ZGV
@@ -152,6 +177,71 @@ for _,order in ipairs({{1,2,3,4,5},{5,4,2,1,3}}) do
     P:Stop()
     assert(ZGV.CurrentGuide==activeGuide and ZGV.CurrentStep==activeStep and ZGV.db.char.step==persisted)
 end
+-- New UI: snapshot rows, explicit context, independent scroll and interruption.
+P:Start("fixture")
+assert(P.panel and P.fixtureHost:GetHeight()==560 and #P.objectives.rows==5)
+assert(P.storyOpen and P.storyPanel:IsVisible() and P.storyEntry.id=="oben-request")
+assert(P.objectives.rows[5].hint.text:find("Shamans"))
+local requestBody=P.storyText.text
+P:FixtureCommand("story")
+assert(P.storyText.text==requestBody and not P:Snapshot().story,"charm gate")
+P:FoldStory(false)
+local fixedWidth,fixedHeight=P.panel:GetWidth(),P.panel:GetHeight()
+P.objectives:SetVerticalScroll(17)
+P.storyPane:SetVerticalScroll(31)
+P:FixtureCommand("goal 1")
+assert(not P.storyOpen and not P.storyPanel:IsVisible(),"routine progress must stay quiet")
+assert(P.objectives.rows[1].text.text:find("1/1") and P.objectives.rows[1].iconIndex==3)
+P:Navigate(1)
+assert(not P:Snapshot().story and not P.storyOpen,"manual Next cannot unlock or reopen context")
+P:ToggleStory();assert(P.storyPanel:IsVisible())
+local storyScroll=P.storyPane.offset
+P:FoldStory(true)
+assert(P.storyCue and not P.storyOpen and P.storyPane.offset==storyScroll)
+P:FixtureCommand("peace");assert(not P.storyOpen,"combat exit must not force reading")
+P:ToggleStory();assert(P.storyOpen and not P.storyCue)
+P:FixtureCommand("goal 5");P:FixtureCommand("story")
+assert(P.storyEntry.id=="oben-revelation" and P.storyOpen)
+assert(P.objectives.rows[5].text.text=="Release Oben's spirit")
+assert(P.panel:GetWidth()==fixedWidth and P.panel:GetHeight()==fixedHeight,"story reflowed guide")
+P:FixtureCommand("combat");assert(not P.storyOpen and P.storyCue)
+P:FixtureCommand("peace");assert(not P.storyOpen)
+P:FixtureCommand("reset");assert(P.storyEntry.id=="oben-request")
+-- Exercise real wrapping/scroll calculations with long current-step data.
+local long=P:Snapshot()
+long.context.body=string.rep("A long already-earned passage. ",400)
+for i=6,36 do long.goals[i]={index=i,action="get",text=string.rep("Long objective ",20),status="incomplete"} end
+P:Render(long)
+assert(P.objectives.range>0 and P.storyPane.range>0,"long text must remain scrollable")
+P.objectives:SetVerticalScroll(42);P.storyPane:SetVerticalScroll(63)
+P:Render(long)
+assert(P.objectives.offset==42 and P.storyPane.offset==63,"progress refresh lost reading positions")
+P:FoldStory(false);P:ToggleStory();assert(P.storyPane.offset==63,"fold lost reading position")
+P.panel.left=100;P:LayoutPanels()
+assert(P.storyPanel.point[1]=="TOPLEFT" and P.storyPanel.point[3]=="TOPRIGHT","use free right side")
+P.panel.left=900;P:LayoutPanels()
+assert(P.storyPanel.point[1]=="TOPRIGHT" and P.storyPanel.point[3]=="TOPLEFT","prefer free left side")
+UIParent:SetWidth(640);P.panel.left=240;P:LayoutPanels()
+assert(not P.storyPanel:IsShown() and P.storyEntry,"never cover objectives when neither side fits")
+UIParent:SetWidth(1920);P.panel.left=900;P:LayoutPanels()
+assert(P.storyPanel:IsVisible(),"retain passage when space returns")
+P:Stop()
+assert(ZGV.CurrentGuide==activeGuide and ZGV.CurrentStep==activeStep and ZGV.db.char.step==persisted)
+-- Explicit passive metadata only; native tooltips remain attached to actions.
+ZGV.Parchment={Suspend=function() end,IsPlain=function(_,g) return g.action=="info" and not g.useitemid end}
+local nativeGoals=ZGV.CurrentStep.goals
+local plain=goal("Inline introduction");plain.action="info"
+local contextGoal=goal("Explicit context");contextGoal.action="info";contextGoal.context=true
+local interactive=goal("Use something");interactive.action="info";interactive.context=true;interactive.useitemid=1;interactive.tooltip="Attached instruction"
+ZGV.CurrentStep.goals={plain,contextGoal,interactive}
+local projected=ZGV:GetPresentationSnapshot()
+assert(projected.goals[1].role=="objective" and projected.goals[2].role=="context")
+assert(projected.goals[3].role=="objective" and projected.goals[3].hint=="Attached instruction")
+P:Start("live")
+assert(P.storyEntry.body=="Explicit context" and P.objectives.rows[2].text.text=="Use something")
+for _,f in ipairs(frames) do if f.scripts.OnEvent then f.scripts.OnEvent(f,"PLAYER_REGEN_DISABLED") end end
+assert(not P.storyOpen and P.storyCue,"native combat interruption")
+P:Stop();ZGV.CurrentStep.goals=nativeGoals;ZGV.Parchment=nil
 -- Combat fallback is deferred without state loss.
 P:Start("live");combat=true;P:Stop();assert(P.pendingStop and P.mode=="live")
 combat=false
@@ -171,4 +261,4 @@ unsubscribe()
 -- Simulated addon reload: module-local switches/fixture disappear, db untouched.
 assert(loadfile(root.."/Presentation.lua"))()
 assert(not ZGV.Presentation.mode and not ZGV.Presentation.fixture and ZGV.db.char.step==persisted)
-print("PASS presentation: detached API, notifications, native visibility/auto/manual progression, fixture orders/story, switch/fallback/combat/fault/reload simulation")
+print("PASS presentation: detached API, native progression, vertical rows/overflow, story gates/fold/recall/scroll/combat/placement, fixture isolation, fallback/fault/reload simulation")
