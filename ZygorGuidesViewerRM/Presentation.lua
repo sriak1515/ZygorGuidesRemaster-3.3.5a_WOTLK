@@ -18,7 +18,8 @@ function ZGV:GetPresentationSnapshot()
         guide={id=self.CurrentGuideName,title=guide and (guide.title_short or guide.title)},
         step={index=self.CurrentStepNum,total=guide and guide.steps and #guide.steps or 0,
             label=step and step.label,title=step and step.title},goals={},
-        navigation={},paused=self.pause and true or false}
+        navigation={},paused=self.pause and true or false,
+        context=self.BanethilStory and self.BanethilStory:Context()}
     for i,goal in ipairs(step and step.goals or {}) do
         local status,progress=goal:GetStatus()
         if status~="hidden" then

@@ -63,6 +63,7 @@
 	<Include file="ZygorGuidesViewerFrame.xml" />
 	<Script file="Parchment.lua"/>
 	<Script file="Presentation.lua"/>
+	<Script file="BanethilStory.lua"/>
 	<Script file="PresentationFixture.lua"/>
 	<Script file="PresentationUI.lua"/>
 	<!-- <Include file="ZygorGuidesViewerMiniFrame.xml"/> -->

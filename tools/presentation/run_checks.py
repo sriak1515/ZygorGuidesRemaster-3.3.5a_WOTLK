@@ -13,9 +13,11 @@ xml = ET.parse(addon / 'files.xml')
 scripts = [n.attrib['file'] for n in xml.iter() if n.tag.endswith('Script')]
 assert scripts.index('Goal.lua') < scripts.index('Presentation.lua')
 assert scripts.index('Parchment.lua') < scripts.index('Presentation.lua')
+assert scripts.index('QuestTracking.lua') < scripts.index('BanethilStory.lua')
+assert scripts.index('Presentation.lua') < scripts.index('BanethilStory.lua') < scripts.index('PresentationUI.lua')
 assert scripts.index('Presentation.lua') < scripts.index('PresentationFixture.lua') < scripts.index('PresentationUI.lua')
 assert 'files.xml' in (addon / 'ZygorGuidesViewerRM.toc').read_text()
-for name in ('Presentation.lua', 'PresentationFixture.lua', 'PresentationUI.lua'):
+for name in ('Presentation.lua', 'BanethilStory.lua', 'PresentationFixture.lua', 'PresentationUI.lua'):
     assert scripts.count(name) == 1
 print('PASS static: TOC/XML presentation loading order', flush=True)
 failures = []

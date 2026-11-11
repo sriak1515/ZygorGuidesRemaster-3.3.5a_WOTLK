@@ -109,7 +109,7 @@ for _,name in ipairs({"FocusStep","FocusStepQuiet","SkipStep","TryToCompleteStep
     local body=assert(source:match("function me:"..name.."%b()%s*\n.-\nend"),name)
     assert(loadstring("local me,ZGV=...;local tinsert,tremove=table.insert,table.remove;local time=function() return 0 end;"..body))(ZGV,ZGV)
 end
-for _,file in ipairs({"Presentation.lua","PresentationFixture.lua","PresentationUI.lua"}) do assert(loadfile(root.."/"..file))() end
+for _,file in ipairs({"Presentation.lua","BanethilStory.lua","PresentationFixture.lua","PresentationUI.lua"}) do assert(loadfile(root.."/"..file))() end
 local P=ZGV.Presentation
 -- Exercise actual renderer dispatch guards while retaining a fallback double.
 local fallbackRender=ZGV.UpdateFrame
@@ -242,6 +242,51 @@ assert(P.storyEntry.body=="Explicit context" and P.objectives.rows[2].text.text=
 for _,f in ipairs(frames) do if f.scripts.OnEvent then f.scripts.OnEvent(f,"PLAYER_REGEN_DISABLED") end end
 assert(not P.storyOpen and P.storyCue,"native combat interruption")
 P:Stop();ZGV.CurrentStep.goals=nativeGoals;ZGV.Parchment=nil
+-- Genuine passage rendered through the same snapshot and panel, with simulated
+-- quest-cache evidence here; test_banethil_story executes the real cache hooks.
+P:Start("live")
+assert(not P.storyEntry)
+ZGV.completedQuests={[2561]=true} -- manual completion is deliberately insufficient
+P:Publish();assert(not P.storyEntry and not ZGV.db.char.banethilStory)
+ZGV.BanethilStory:ObserveQuestLog({[2541]={complete=true}})
+P:Publish();assert(not P.storyEntry)
+local guideStep,guidePause=ZGV.CurrentStepNum,ZGV.pause
+ZGV.BanethilStory:ObserveQuestLog({[2561]={complete=false}})
+assert(P.storyEntry.id=="KAL-02/oben-charm-revelation" and P.storyOpen)
+assert(P.storyTitle.text=="What the charm reveals" and P.storyText.text:find("fallen body"))
+assert(ZGV.CurrentStepNum==guideStep and ZGV.pause==guidePause)
+P:FoldStory(false);P.storyPane:SetVerticalScroll(math.min(19,P.storyPane.range))
+local retainedScroll=P.storyPane.offset
+ZGV.CurrentGuideName="another-guide";ZGV.CurrentStepNum=99
+P:Publish()
+assert(P.storyEntry and not P.storyOpen and P.storyPane.offset==retainedScroll,"navigation disturbed story")
+local detached=ZGV:GetPresentationSnapshot();detached.context.body="mutation"
+assert(ZGV:GetPresentationSnapshot().context.body~=detached.context.body)
+P:ToggleStory();assert(P.storyOpen)
+P:FoldStory(true);P:Publish();assert(P.storyCue and not P.storyOpen)
+local storyRecord=ZGV.db.char.banethilStory
+P:Start("fixture");P:FixtureCommand("goal 5");P:FixtureCommand("story")
+assert(ZGV.db.char.banethilStory==storyRecord,"fixture changed live evidence")
+P:Stop()
+ZGV.db.char={}
+P:Start("live");combat=true
+ZGV.BanethilStory:ObserveQuestLog({[2561]={}})
+assert(P.storyEntry and not P.storyOpen and P.storyCue,"conversation in combat must leave a cue")
+combat=false
+for _,f in ipairs(frames) do if f.scripts.OnEvent then f.scripts.OnEvent(f,"PLAYER_REGEN_ENABLED") end end
+assert(not P.storyOpen);P:ToggleStory();assert(P.storyOpen)
+P:Stop();ZGV.db.char={step=persisted,banethilStory=storyRecord}
+-- Module reload preserves only the character's record; reader starts closed.
+assert(loadfile(root.."/BanethilStory.lua"))()
+P:Start("live")
+assert(P.storyEntry and not P.storyOpen and P.storyCue)
+P:ToggleStory();assert(P.storyOpen and P.storyText.text:find("fallen body"))
+P:Stop()
+ZGV.CurrentGuideName="test-guide";ZGV.CurrentStepNum=guideStep
+-- A different character cannot inherit this passage.
+ZGV.db.char={}
+P:Start("live");assert(not P.storyEntry);P:Stop()
+ZGV.db.char={step=persisted,banethilStory=storyRecord}
 -- Combat fallback is deferred without state loss.
 P:Start("live");combat=true;P:Stop();assert(P.pendingStop and P.mode=="live")
 combat=false

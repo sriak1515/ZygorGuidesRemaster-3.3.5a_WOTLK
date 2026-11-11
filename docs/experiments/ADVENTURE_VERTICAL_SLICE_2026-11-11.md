@@ -1,6 +1,9 @@
 # Adventure vertical presentation slice — 2026-11-11
 
 Experimental implementation, **not released for normal gameplay**.
+Follow-up: [one real quest-state story connection](BANETHIL_STORY_TRIGGER_2026-11-11.md)
+adds passage persistence and records the player's subsequent layout/progression
+confirmation. The implementation boundaries below describe the original slice.
 Branch: `experiments/adventure-vertical-slice-2026-11-11`.
 Base: PoC `852f241dc05e84ec21a222eb53ae6554e49697b8`.
 The commit containing this report identifies the implementation revision.
@@ -14,7 +17,7 @@ folding, recalling and combat interruption do not move the guide or change
 progress. There is no movement/timer dismissal or reading acknowledgement.
 
 This increment tests the core composition and interruption behavior. It does not
-implement a journal, persistent story history, live earned-story proofs, cross-step
+implement a journal, persistent story history, live story evidence, cross-step
 objective aggregation, new guide syntax, or secure item/spell buttons. Live rows
 are a read-only projection; Previous/Next still delegate to Zygor. Use **Existing
 UI** for native goal clicks, confirmations, item/spell actions and other controls.
@@ -42,7 +45,7 @@ commit `632a224b3804f0729f1964d93012608dcfbda641`, especially:
 
 The later Ban'ethil vertical candidate is the reference: compact fixed guide,
 left-hand story, deliberate fold, no movement timeout, combat tuck and recall.
-Its journal and persistent earned-history model are deferred. HTML pixel sizes
+Its journal and persistent story-history model are deferred. HTML pixel sizes
 are not copied literally into WoW's scaled logical units.
 
 Inspected `Parchment.lua`, its partition/fill/scroll routines, background reader,
@@ -64,7 +67,7 @@ adapter, fixture, dispatch and recovery tests before implementing this slice.
 Only explicit `goal.context` passing Parchment's passive-row check receives
 `role="context"`; all other rows remain objectives in original order. This is
 current-step authored presentation, **not** a claim that a quest was accepted or
-rewarded. Merely selecting another step never backfills earned history. Live
+rewarded. Merely selecting another step never backfills story history. Live
 mode normally has no separate story when the guide supplies no explicit context;
 untagged introductory prose remains in the main flow.
 
@@ -149,7 +152,7 @@ story session, Ban'ethil replay, server changes or campaign edits are needed.
 
 After that checkpoint, address the demonstrated layout failure, if any. The next
 functional increment should restore native objective interactions/secure actions
-through a guarded binding to the current engine goal. Earned-story persistence
+through a guarded binding to the current engine goal. Story persistence
 needs an explicit authored signal/proof contract; do not infer it from selected
 steps or expand into a journal before that contract is established.
 

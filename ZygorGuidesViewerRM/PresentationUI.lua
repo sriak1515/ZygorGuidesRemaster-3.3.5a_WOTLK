@@ -123,15 +123,15 @@ function P:Render(snapshot)
     end
     local entry=snapshot.context
     if not entry and #context>0 then
-        -- Explicit current-step context only. This is not earned-story history.
+        -- Explicit current-step context remains a fallback for other passages.
         entry={id=stepKey,title=snapshot.step.title or "Current context",body=table.concat(context,"\n\n")}
     end
-    local identity=entry and (snapshot.source..":"..tostring(snapshot.guide.id)..":"..entry.id)
+    local identity=entry and (snapshot.source..":"..(entry.persistent and "story" or tostring(snapshot.guide.id))..":"..entry.id)
     local changed=identity~=self.storyIdentity
     self.storyEntry,self.storyIdentity=entry,identity
     if changed then
         self.storyCue=entry and true or false
-        self.storyOpen=entry and not (InCombatLockdown() or self.fixtureCombat) or false
+        self.storyOpen=entry and (not entry.persistent or entry.autoOpen) and not (InCombatLockdown() or self.fixtureCombat) or false
     end
     self.objectives.rows=self.objectives.rows or {}
     local y=0

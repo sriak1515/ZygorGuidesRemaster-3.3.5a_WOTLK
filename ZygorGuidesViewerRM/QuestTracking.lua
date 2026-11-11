@@ -232,6 +232,9 @@ function me:QuestTracking_CacheQuestLog(force)
 		--self.recentlyCompletedQuests = {}
 	end
 
+	-- Capture story evidence from the freshly rebuilt log, before guide callbacks.
+	if self.BanethilStory then self.BanethilStory:ObserveQuestLog(self.questsbyid) end
+
 	-- Now, handle the news and losts.
 
 	for i,q in ipairs(newquests) do
@@ -380,6 +383,9 @@ end
 
 function me:QUEST_QUERY_COMPLETE_QuestTracking()
 	self.completedQuests = GetQuestsCompleted()
+	-- This table is fresh from the client. Later manual goal controls can modify
+	-- completedQuests, so presentation must never use that mutable table as proof.
+	if self.BanethilStory then self.BanethilStory:ObserveCompletedQuests(self.completedQuests) end
 	self.completedQuestTitles = {}
 	self:Debug("Got completed quests list")
 	--[[
