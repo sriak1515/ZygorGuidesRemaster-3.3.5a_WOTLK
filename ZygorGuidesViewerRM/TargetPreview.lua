@@ -902,6 +902,10 @@ function me:TargetPreview_ApplyProfile()
 end
 
 function me:TargetPreview_Refresh(force)
+	if self.Presentation and self.Presentation.mode=="live" then
+		if self.TargetPreviewPane then self.TargetPreviewPane:Hide() end
+		return
+	end
 	if not self.db or not self.db.profile or not self.db.profile.targetpreview_enabled then
 		if self.TargetPreviewPane then self.TargetPreviewPane:Hide() end
 		return

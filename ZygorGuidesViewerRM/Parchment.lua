@@ -26,6 +26,7 @@ local function setShown(frame, visible)
 end
 
 function ZGV:ParchmentEnabled()
+    if self.Presentation and self.Presentation.mode=="live" then return false end
     local p = self.db and self.db.profile
     return p and p.parchmentprototype ~= false and p.skin == "remaster" and p.displaymode == "guide"
 end

@@ -2358,6 +2358,7 @@ do
 	end
 
 	function me:ActionButtons_Refresh(force)
+		if self.Presentation and self.Presentation.mode=="live" then return end
 		local profile = self.db and self.db.profile
 		if InCombatLockdown() then
 			local bar = self.ActionButtonBar
@@ -2489,6 +2490,7 @@ do
 end
 
 function me:InlineButtonsEnabled()
+	if self.Presentation and self.Presentation.mode=="live" then return false end
 	return not not (
 		self.BUTTONS_INLINE
 		and self.db and self.db.profile
@@ -4514,6 +4516,7 @@ function me:FocusStep(num,quiet)
 	end
 
 	self:AnimateGears()
+	if self.Presentation then self.Presentation:Publish() end
 end
 
 function me:FocusStepQuiet(num)
@@ -4751,6 +4754,7 @@ function me:TryToCompleteStep(force)
 	self.lasttriedstep = self.CurrentStep
 	self.lastwascompleted = stepcomplete
 	self.lastCurrentStepGoalStateSig = goalStateSig
+	if self.Presentation then self.Presentation:Publish() end
 end
 
 
@@ -4960,6 +4964,7 @@ local itemsources={"vendor","drop","ore","herb","skin"}
 local gold_ox,gold_oy=0,0
 
 function me:UpdateFrame(full,onupdate,nonsecure_only)
+	if self.Presentation and self.Presentation.mode=="live" then return self.Presentation:Refresh() end
 	if self.ParchmentEnabled and self:ParchmentEnabled() then return self:UpdateParchment() end
 	if self.Parchment then self.Parchment:Suspend() end
 	if full then self.stepchanged=true end
@@ -6060,6 +6065,7 @@ setmetatable(actionicon,{__index=function() return 2 end})
 
 
 function me:UpdateFrameCurrent(nonsecure_only)
+	if self.Presentation and self.Presentation.mode=="live" then return self.Presentation:Refresh() end
 	if self.ParchmentEnabled and self:ParchmentEnabled() then return self:UpdateParchment() end
 	-- current step!
 

@@ -844,6 +844,7 @@ function ZygorGuidesViewerFrameMaster_OnUpdate(self,elapsed)
 end
 
 function ZygorGuidesViewerFrame_OnUpdate(self,elapsed)
+	if ZGV.Presentation and ZGV.Presentation.mode=="live" then return ZGV.Presentation:Tick(elapsed) end
 	if ZGV.ParchmentEnabled and ZGV:ParchmentEnabled() then return ZGV:ParchmentTick(elapsed) end
 	--[[
 	if not self.aligned then
