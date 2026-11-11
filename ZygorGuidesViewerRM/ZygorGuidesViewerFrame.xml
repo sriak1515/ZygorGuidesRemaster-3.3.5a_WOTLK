@@ -251,6 +251,10 @@
 					<OnSizeChanged>
 						local ZGV = ZygorGuidesViewer
 						if not ZGV or not ZGV.db then return end
+						if ZGV.Presentation and ZGV.Presentation.mode=="live" then
+							ZGV.Presentation:Relayout()
+							return
+						end
 						if ZGV.ParchmentEnabled and ZGV:ParchmentEnabled() then
 							ZGV.parchmentDirty = true
 							return

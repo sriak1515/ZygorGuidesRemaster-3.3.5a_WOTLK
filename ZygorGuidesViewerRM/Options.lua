@@ -755,11 +755,19 @@ function me:Options_DefineOptions()
 					},
 					parchmentreadingsize = {
 					    name = "Reading text size",
-					    desc = "Story paragraphs and optional background in the parchment guide.",
+					    desc = "Story text in the adventure guide and parchment reader.",
 					    type = "range", min = 12, max = 24, step = 1, bigStep = 1,
 					    get = function() return self.Parchment:Settings().contextsize end,
 					    set = function(_,v) self.Parchment:SetContextSize(v) end,
 					    order = 3.25, width = "normal",
+					},
+					adventureinterface = {
+					    name = "Experimental adventure guide",
+					    desc = "Compact objectives with attached story. Drag the title to move; drag the bottom corner to resize. Font and scale controls above apply. Reload returns to the existing interface.",
+					    type = "toggle",
+					    get = function() return self.Presentation and self.Presentation.mode=="live" or false end,
+					    set = function(_,v) if v then self.Presentation:Start("live") else self.Presentation:Stop() end end,
+					    order = 3.26, width = "full",
 					},
 					sep_window_row3 = {
 						type = "description",
@@ -1876,11 +1884,19 @@ function me:Options_DefineOptions()
 			},
 			parchmentreadingsize = {
 			    name = "Reading text size",
-			    desc = "Story paragraphs and optional background in the parchment guide.",
+			    desc = "Story text in the adventure guide and parchment reader.",
 			    type = "range", min = 12, max = 24, step = 1, bigStep = 1,
 			    get = function() return self.Parchment:Settings().contextsize end,
 			    set = function(_,v) self.Parchment:SetContextSize(v) end,
 			    order = 3.45, width = "normal",
+			},
+			adventureinterface = {
+			    name = "Experimental adventure guide",
+			    desc = "Compact objectives with attached story. Drag the title to move; drag the bottom corner to resize. Font and scale controls above apply. Reload returns to the existing interface.",
+			    type = "toggle",
+			    get = function() return self.Presentation and self.Presentation.mode=="live" or false end,
+			    set = function(_,v) if v then self.Presentation:Start("live") else self.Presentation:Stop() end end,
+			    order = 3.46, width = "full",
 			},
 			opacitymain = {
 				name = L["opt_opacitymain"],

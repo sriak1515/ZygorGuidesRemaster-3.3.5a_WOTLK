@@ -1648,6 +1648,7 @@ do
 	end
 
 	function me:InlineButtons_RefreshSecureOverlays(force)
+		if self.Presentation and self.Presentation.mode=="live" then return self.Presentation:SecureButtons() end
 		if not self:InlineButtonsEnabled() or not self.Frame or not self.Frame:IsShown() then
 			self:InlineButtons_ClearSecureOverlays()
 			return
@@ -1953,6 +1954,7 @@ do
 	end
 
 	function me:ActionButtons_GetSnapFrame()
+		if self.Presentation and self.Presentation.mode=="live" then return self.Presentation.panel end
 		if self.RemasterFrames and self.RemasterFrames.root then
 			return self.RemasterFrames.root
 		end
@@ -2358,7 +2360,6 @@ do
 	end
 
 	function me:ActionButtons_Refresh(force)
-		if self.Presentation and self.Presentation.mode=="live" then return end
 		local profile = self.db and self.db.profile
 		if InCombatLockdown() then
 			local bar = self.ActionButtonBar
@@ -2490,7 +2491,6 @@ do
 end
 
 function me:InlineButtonsEnabled()
-	if self.Presentation and self.Presentation.mode=="live" then return false end
 	return not not (
 		self.BUTTONS_INLINE
 		and self.db and self.db.profile
@@ -4789,6 +4789,7 @@ end
 
 
 function me:UpdateLocking()
+	if self.Presentation and self.Presentation.mode=="live" then return self.Presentation:Relayout() end
 	if self.ParchmentEnabled and self:ParchmentEnabled() then return self:UpdateParchment() end
 	-- remove mouse activity in lock mode
 	local locked = self.db.profile["windowlocked"]
@@ -6611,6 +6612,7 @@ function me:ReanchorFrame()
 end
 
 function me:AlignFrame()
+	if self.Presentation and self.Presentation.mode=="live" then return self.Presentation:Relayout() end
 	if self.ParchmentEnabled and self:ParchmentEnabled() then return self:UpdateParchment() end
 	if self.db and self.db.profile and self:IsRemasterSkin() then
 		if self.ApplyRemasterSkin then
@@ -7027,6 +7029,7 @@ function me:UpdateSkin(visualOnly)
 end
 
 function me:ApplyRemasterSkin(visualOnly)
+	if self.Presentation and self.Presentation.mode=="live" then return self.Presentation:Relayout() end
 	if self.ParchmentEnabled and self:ParchmentEnabled() then return self:UpdateParchment() end
 	if not self.framesLoaded or not ZygorGuidesViewerFrame or not ZygorGuidesViewerFrame_Border then
 		return
@@ -7603,6 +7606,7 @@ function me:RestoreLegacySkin()
 end
 
 function me:ResizeFrame()
+	if self.Presentation and self.Presentation.mode=="live" then return self.Presentation:Relayout() end
 	if self.ParchmentEnabled and self:ParchmentEnabled() then return end
 	if self.db and self.db.profile and self:IsRemasterSkin() then
 		if ZGV and ZGV.framemoving then
@@ -8291,6 +8295,7 @@ end
 
 
 function me:GoalOnClick(goalframe,button)
+	local quiet = (self.Presentation and self.Presentation.mode=="live") or (self.ParchmentEnabled and self:ParchmentEnabled())
 	local stepframe = goalframe:GetParent():GetParent()
 	if not self.db.profile.showallsteps and stepframe.step~=self.CurrentStep then return end -- no clicking on non-current steps in compact mode
 	--if stepframe:GetScript("OnClick") then stepframe:GetScript("OnClick")(stepframe,button) end
@@ -8375,7 +8380,7 @@ function me:GoalOnClick(goalframe,button)
 					self:SetWaypoint(posX*100,posY*100,title)
 				end
 			end
-			if self.ParchmentEnabled and self:ParchmentEnabled() then return end
+			if quiet then return end
 			local max = self.maxQuestLevels[goal.questid]
 			local qname = goal.quest or (goal.questid and tostring(goal.questid)) or "?"
 			self:Print("Quest \""..qname.."\" (#"..tostring(goal.questid).."): done at level "..tostring(goal.parentStep.level)..", reaches to level "..tostring(max))
@@ -8399,9 +8404,9 @@ function me:GoalOnClick(goalframe,button)
 			if goal.quest and IsShiftKeyDown() then
 				self.completedQuests[goal.quest]=nil
 				if goal.questid then self.completedQuests[goal.questid]=nil end
-				if not (self.ParchmentEnabled and self:ParchmentEnabled()) then self:Print("Marking quest '"..goal.quest.."'"..(goal.questid and " (#"..goal.questid..")" or "").." as not completed.") end
+				if not quiet then self:Print("Marking quest '"..goal.quest.."'"..(goal.questid and " (#"..goal.questid..")" or "").." as not completed.") end
 			else
-				if not (self.ParchmentEnabled and self:ParchmentEnabled()) then self:Print("Marking step as incomplete.") end
+				if not quiet then self:Print("Marking step as incomplete.") end
 			end
 		else
 			--self.recentlyCompletedGoals[goal]=true
@@ -8409,7 +8414,7 @@ function me:GoalOnClick(goalframe,button)
 			if goal.quest and IsShiftKeyDown() then
 				self.completedQuests[goal.quest]=true
 				if goal.questid then self.completedQuests[goal.questid]=true end
-				if not (self.ParchmentEnabled and self:ParchmentEnabled()) then self:Print("Marking quest '"..goal.quest.."'"..(goal.questid and " (#"..goal.questid..")" or "").." as completed.") end
+				if not quiet then self:Print("Marking quest '"..goal.quest.."'"..(goal.questid and " (#"..goal.questid..")" or "").." as completed.") end
 			end
 		end
 		self.pause=nil
@@ -8623,7 +8628,7 @@ function me:OpenGuideMenu()
 	insert_guides(menu,self.db.char.guides_history,nil,false)
 
 	-- display!
-	local menuAnchor = self.ParchmentEnabled and self:ParchmentEnabled() and self.Parchment.header or ZygorGuidesViewerFrame_Border_TitleBar
+	local menuAnchor = self.Presentation and self.Presentation.mode=="live" and self.Presentation.header or self.ParchmentEnabled and self:ParchmentEnabled() and self.Parchment.header or ZygorGuidesViewerFrame_Border_TitleBar
 	UIDropDownMenu_SetAnchor(ZGVFMenu, -50, 15, "TOPRIGHT", menuAnchor, "BOTTOMRIGHT")
 	-- The dropdown width must be established before EasyMenu positions the
 	-- first list. Setting it afterwards leaves the first opening anchored with

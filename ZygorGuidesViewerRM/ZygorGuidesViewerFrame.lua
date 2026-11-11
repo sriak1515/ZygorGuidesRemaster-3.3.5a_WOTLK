@@ -754,6 +754,7 @@ local function SetRemasterChromeHidden(remasterFrames, hidden, force)
 end
 
 function ZGV:RefreshAutoHideBorderState()
+	if self.Presentation and self.Presentation.mode=="live" then return end
 	if self.ParchmentEnabled and self:ParchmentEnabled() then return end
 	if not ZGVF or not self.db or not self.db.profile then return end
 	local hideborder = self.db.profile.hideborder
@@ -821,6 +822,7 @@ function ZGV:RefreshAutoHideBorderState()
 end
 
 function ZGV:ForceHideBorderNow()
+	if self.Presentation and self.Presentation.mode=="live" then return end
 	if self.ParchmentEnabled and self:ParchmentEnabled() then return end
 	if not self.db or not self.db.profile or not self.db.profile.hideborder then return end
 	local isRemaster = self:IsRemasterSkin()

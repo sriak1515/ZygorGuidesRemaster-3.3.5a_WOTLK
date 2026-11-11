@@ -589,9 +589,10 @@ function P:OpenBackground(entry)
     f:Show(); self:LayoutBackground(changed)
 end
 
-function P:ClearSecureButtons()
-    if InCombatLockdown() or not self.secure then return end
-    for _,b in ipairs(self.secure.buttons) do b:Hide(); b.actionSpec=nil end
+function P:ClearSecureButtons(owner)
+    local owner=owner or self
+    if InCombatLockdown() or not owner.secure then return end
+    for _,b in ipairs(owner.secure.buttons) do b:Hide(); b.actionSpec=nil end
 end
 
 function P:HolderVisible(row, pane)
@@ -601,38 +602,39 @@ function P:HolderVisible(row, pane)
     return t and b and pt and pb and t<=pt and b>=pb
 end
 
-function P:SecureButtons()
+function P:SecureButtons(owner)
+    local owner=owner or self
     if InCombatLockdown() then return end
-    if not self.root or not self.root:IsVisible() then self:ClearSecureButtons(); return end
-    if not self.secure then
-        self.secure=CreateFrame("Frame","ZGVParchmentSecureRoot",UIParent,"SecureHandlerStateTemplate")
-        self.secure:SetAllPoints(UIParent)
-        self.secure:SetFrameStrata(ZGV.Frame:GetFrameStrata())
-        self.secure:SetFrameLevel(ZGV.Frame:GetFrameLevel()+80)
-        self.secure.buttons={}
+    if not owner.root or not owner.root:IsVisible() then self:ClearSecureButtons(owner); return end
+    if not owner.secure then
+        owner.secure=CreateFrame("Frame",owner==self and "ZGVParchmentSecureRoot" or "ZGVAdventureSecureRoot",UIParent,"SecureHandlerStateTemplate")
+        owner.secure:SetAllPoints(UIParent)
+        owner.secure:SetFrameStrata(ZGV.Frame:GetFrameStrata())
+        owner.secure:SetFrameLevel(ZGV.Frame:GetFrameLevel()+80)
+        owner.secure.buttons={}
         -- Never leave absolute-coordinate click targets over a scrolling viewer
         -- during lockdown. No secure attributes or anchors are changed in combat.
-        RegisterStateDriver(self.secure,"visibility","[combat] hide; show")
+        RegisterStateDriver(owner.secure,"visibility","[combat] hide; show")
     end
-    self:ClearSecureButtons()
+    self:ClearSecureButtons(owner)
     local n=0
-    for _,pane in ipairs({self.action,self.context}) do
+    for _,pane in ipairs({owner.action,owner.context}) do
         for _,row in ipairs(pane.rows) do
             if row.inlineActionSpec and self:HolderVisible(row,pane) then
                 n=n+1
-                local b=self.secure.buttons[n]
+                local b=owner.secure.buttons[n]
                 if not b then
-                    b=CreateFrame("CheckButton",nil,self.secure,"SecureActionButtonTemplate")
+                    b=CreateFrame("CheckButton",nil,owner.secure,"SecureActionButtonTemplate")
                     b:RegisterForClicks("AnyUp")
                     b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square","ADD")
                     b:SetScript("OnEnter",function(self) ZGV:ShowActionButtonTooltip(self) end)
                     b:SetScript("OnLeave",function() GameTooltip:Hide() end)
                     b:SetScript("PostClick",function(self) ZGV:ActionButtons_HandlePostClick(self) end)
                     b:EnableMouseWheel(true); b:SetScript("OnMouseWheel",pane.wheel)
-                    self.secure.buttons[n]=b
+                    owner.secure.buttons[n]=b
                 end
                 b:SetScript("OnMouseWheel",pane.wheel)
-                ZGV:InlineButtons_ApplySecureOverlaySpec(b,row.inlineActionSpec,row.actionHolder,self.secure)
+                ZGV:InlineButtons_ApplySecureOverlaySpec(b,row.inlineActionSpec,row.actionHolder,owner.secure)
             end
         end
     end
@@ -707,7 +709,7 @@ function P:Fill(pane,goals,width,height,step,newStep)
         point(row,pane.child,0,y,width-14,22)
         row.contentY=y
         local plain=self:IsPlain(goal)
-        local size=(reading or plain) and settings.contextsize or settings.objectivesize
+        local size=(reading or (plain and not pane.adventure)) and settings.contextsize or settings.objectivesize
         local spec=ZGV:InlineButtonsEnabled() and ZGV:GetGoalActionSpec(goal)
         local interactive=spec or goal.useitemid or goal.useitem or goal.castspellid
             or goal.castspell or goal.script or goal.macro or goal.petaction
@@ -748,8 +750,8 @@ function P:Fill(pane,goals,width,height,step,newStep)
             h=max(h,textHeight+3+tipHeight)
         end
         row:SetHeight(h)
-        row.label:SetTextColor(unpack(complete and completedInk or ink))
-        row.tip:SetTextColor(unpack(complete and completedInk or {0.32,0.27,0.19}))
+        row.label:SetTextColor(unpack(pane.adventure and (complete and {0.56,0.65,0.56} or light) or (complete and completedInk or ink)))
+        row.tip:SetTextColor(unpack(pane.adventure and {0.69,0.72,0.66} or (complete and completedInk or {0.32,0.27,0.19})))
         -- A pending objective must not look like a paragraph with a blank gutter.
         -- Item/spell/script buttons occupy this same gutter and retain priority.
         local iconIndex=objectiveIcons[goal.action] or 4
@@ -971,9 +973,10 @@ function P:Browse(width,top,height)
     self.wasBrowsing=true
 end
 
-function ZGV:ParchmentCooldowns()
-    if not P.root then return end
-    for _,pane in ipairs({P.action,P.context}) do
+function ZGV:ParchmentCooldowns(owner)
+    local owner=owner or P
+    if not owner.root then return end
+    for _,pane in ipairs({owner.action,owner.context}) do
         for _,row in ipairs(pane.rows) do
             local spec=row.inlineActionSpec
             if spec then

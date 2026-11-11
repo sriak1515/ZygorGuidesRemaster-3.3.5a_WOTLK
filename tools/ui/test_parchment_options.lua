@@ -26,3 +26,15 @@ for key,expected in pairs({fontsize=24,fontsecsize=22,parchmentreadingsize=24}) 
 end
 assert(me.alignments==4 and me.updates==4)
 print("PASS: both normal font settings presentations execute authoritative native setters and the dedicated reading-size control")
+
+me.Presentation={Start=function(self,mode) self.mode=mode end,Stop=function(self) self.mode=nil end}
+local count=0
+for block in source:gmatch("\n[\t ]*adventureinterface = (%b{})") do
+    count=count+1
+    local chunk=assert(loadstring("return "..block));setfenv(chunk,env)
+    local option=chunk()
+    assert(not option.get());option.set({},true);assert(option.get() and me.Presentation.mode=="live")
+    option.set({},false);assert(not option.get())
+end
+assert(count==2,"both existing settings presentations must expose adventure activation")
+print("PASS: adventure interface is available through both normal settings presentations")
