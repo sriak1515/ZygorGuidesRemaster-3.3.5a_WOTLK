@@ -96,7 +96,7 @@ function P:Settings()
     return s
 end
 function P:SaveGeometry()
-    local host=self.panel and self.panel:GetParent()
+    local host=self.host
     if not host then return end
     local s=self:Settings()
     s.width,s.height=host:GetWidth(),host:GetHeight()
@@ -131,6 +131,7 @@ end
 function P:Relayout()
     if self.layingOut or not self.panel then return end
     self.layingOut=true
+    self:SyncHostVisibility()
     local ok,err=true,nil
     if self.lastSnapshot then ok,err=pcall(self.Render,self,self.lastSnapshot) end
     self.layingOut=nil
@@ -157,42 +158,80 @@ function P:LayoutPanels()
     if not self.panel or not self.lastSnapshot then return end
     local panel=self.panel
     local w,h=panel:GetWidth(),panel:GetHeight()
+    -- Utilities borrow one line only when requested; normal play has no footer.
+    shown(self.toolsRow,self.toolsOpen)
+    self.lock.label:SetText(ZGV.db.profile.windowlocked and "Unlock" or "Lock")
+    local top=self.toolsOpen and 88 or 62
+    self.stepTitle:ClearAllPoints();self.stepTitle:SetPoint("TOPLEFT",12,-top)
+    self.stepTitle:SetWidth(w-24);self.stepTitle:SetHeight(0)
+    local titleHeight=clamp(self.stepTitle:GetStringHeight(),14,32)
+    self.stepTitle:SetHeight(titleHeight)
+    top=top+titleHeight+5
+    local bearing=clean(self.lastSnapshot.navigation.title)
+    local hasBearing=bearing~="" and bearing~=clean(self.lastSnapshot.step.title)
+    shown(self.bearing,hasBearing)
+    if hasBearing then
+        self.bearing:ClearAllPoints();self.bearing:SetPoint("TOPLEFT",12,-top)
+        self.bearing:SetWidth(w-24);self.bearing:SetHeight(0)
+        local height=clamp(self.bearing:GetStringHeight(),12,28)
+        self.bearing:SetHeight(height);top=top+height+6
+    end
+    self.objectiveTop=top
+    self.objectives:ClearAllPoints()
+    self.objectives:SetPoint("TOPLEFT",12,-top);self.objectives:SetPoint("BOTTOMRIGHT",-30,12)
+    self.empty:ClearAllPoints();self.empty:SetPoint("TOPLEFT",12,-top)
+    self.empty:SetWidth(w-42)
     if self.fixture then self.objectives.child:SetWidth(math.max(100,w-58)) end
-    -- Story appears beside the fixed guide; never reflows its objectives.
-    -- Choose a side using scaled screen space, without moving the engine host.
+
     local scale=panel:GetEffectiveScale()
     local screen=UIParent:GetWidth()*UIParent:GetEffectiveScale()/scale
     local left=panel:GetLeft() or 0
     local right=screen-left-w
-    local space=math.max(left,right)-12
+    local gap=4
+    local space=math.max(left,right)-gap
     local width=math.min(clamp(w+40,300,400),space)
     local fits=width>=260
+    local onLeft=left>=width+gap
+    self.storyFits=fits
     self.storyPanel:ClearAllPoints()
-    self.storyPanel:SetSize(math.max(260,width),h)
-    if left>=width+12 then self.storyPanel:SetPoint("TOPRIGHT",panel,"TOPLEFT",-12,0)
-    else self.storyPanel:SetPoint("TOPLEFT",panel,"TOPRIGHT",12,0) end
-    self.storyPane.child:SetWidth(math.max(100,width-66))
+    if onLeft then self.storyPanel:SetPoint("TOPRIGHT",panel,"TOPLEFT",-gap,0)
+    else self.storyPanel:SetPoint("TOPLEFT",panel,"TOPRIGHT",gap,0) end
+    width=math.max(260,width)
+    self.storyTitle:SetWidth(width-64);self.storyTitle:SetHeight(0)
+    local storyTitleHeight=math.max(20,self.storyTitle:GetStringHeight())
+    self.storyTitle:SetHeight(storyTitleHeight)
+    self.storyRule:ClearAllPoints();self.storyRule:SetPoint("TOPLEFT",18,-(22+storyTitleHeight))
+    self.storyRule:SetSize(width-36,12)
+    local storyTop=storyTitleHeight+40
+    self.storyText:SetWidth(width-52);self.storyPane.child:SetWidth(width-52)
+    self.storyText:SetHeight(0)
+    -- Short passages fit their content; long passages retain a bounded reader.
+    local height=clamp(storyTop+self.storyText:GetStringHeight()+30,160,h)
+    self.storyPanel:SetSize(width,height)
+    self.storyPane:ClearAllPoints()
+    self.storyPane:SetPoint("TOPLEFT",18,-storyTop);self.storyPane:SetPoint("BOTTOMRIGHT",-34,14)
     shown(self.storyPanel,self.storyEntry and self.storyOpen and fits)
-    self.storyToggle.label:SetText(not self.storyEntry and "Story" or
-        (not fits and "Story (make room)" or (self.storyCue and "New story" or (self.storyOpen and "Fold story" or "Story"))))
-    self.storyToggle:SetAlpha(self.storyEntry and 1 or 0.4)
+    self.storyToggle:ClearAllPoints()
+    if onLeft then self.storyToggle:SetPoint("TOPRIGHT",panel,"TOPLEFT",0,-34)
+    else self.storyToggle:SetPoint("TOPLEFT",panel,"TOPRIGHT",0,-34) end
+    self.storyToggle.label:SetText(self.storyCue and "!" or "")
+    shown(self.storyToggle,self.storyEntry and not (self.storyOpen and fits))
     shown(self.grip,not ZGV.db.profile.windowlocked)
     self:SecureButtons()
 end
+
 function P:Render(snapshot)
     if not self.panel then return end
     self.lastSnapshot=snapshot
-    self:LayoutPanels()
     local stepKey=snapshot.source..":"..tostring(snapshot.guide.id)..":"..tostring(snapshot.step.index)
     local newStep=stepKey~=self.renderStepKey
     self.renderStepKey=stepKey
-    self.guideTitle:SetText(clean(snapshot.guide.title or "Choose a guide"))
+    self.guideTitle:SetText((snapshot.source=="fixture" and "[Simulation] " or "")..clean(snapshot.guide.title or "Choose a guide"))
     self.stepTitle:SetText(clean(snapshot.step.title or "Current objectives"))
-    self.modeLabel:SetText(snapshot.source=="fixture" and "ADVENTURE / SIMULATION" or "ADVENTURE")
     self.position:SetText(tostring(snapshot.step.index or 0).." / "..tostring(snapshot.step.total or 0)..(snapshot.paused and "  Paused" or ""))
     self.progress:SetMinMaxValues(0,math.max(1,snapshot.step.total or 0))
     self.progress:SetValue(snapshot.step.index or 0)
-    self.bearing:SetText(clean(snapshot.navigation.title or "Follow the existing navigation arrow"))
+    self.bearing:SetText(clean(snapshot.navigation.title))
     local rows,context={},{}
     for _,goal in ipairs(snapshot.goals) do
         if goal.role=="context" then
@@ -212,6 +251,13 @@ function P:Render(snapshot)
         self.storyOpen=entry and (not entry.persistent or entry.autoOpen) and not (InCombatLockdown() or self.fixtureCombat) or false
         self.storyCue=entry and not self.storyOpen or false
     end
+    if entry then
+        self.storyTitle:SetText(clean(entry.title))
+        local reading=ZGV.db.profile.parchment and ZGV.db.profile.parchment.contextsize
+        self.storyText:SetFont(self.storyText:GetFont(),math.max(12,math.min(24,tonumber(reading) or 16)))
+        self.storyText:SetText(clean(entry.body))
+    end
+    self:LayoutPanels()
     if snapshot.source=="live" then
         local native={}
         for _,goal in ipairs(rows) do
@@ -261,23 +307,30 @@ function P:Render(snapshot)
     self.empty:SetText(snapshot.available and "No current objectives." or "Select Guides to choose an adventure.")
     shown(self.empty,#rows==0)
 
-    if entry then
-        self.storyTitle:SetText(clean(entry.title))
-        local reading=ZGV.db.profile.parchment and ZGV.db.profile.parchment.contextsize
-        self.storyText:SetFont(self.storyText:GetFont(),math.max(12,math.min(24,tonumber(reading) or 16)))
-        self.storyText:SetText(clean(entry.body))
-        self.storyText:SetWidth(self.storyPane.child:GetWidth());self.storyText:SetHeight(0)
-        finishPane(self.storyPane,self.storyText:GetStringHeight()+12,changed)
-    end
+    if entry then finishPane(self.storyPane,self.storyText:GetStringHeight()+12,changed) end
     self:LayoutPanels()
 end
 
+function P:SyncHostVisibility()
+    if not self.panel or not self.host or not self.mode then return end
+    shown(self.panel,self.host:IsVisible())
+    self.panel:SetAlpha(self.host:GetAlpha())
+    local scale=self.host:GetEffectiveScale()/UIParent:GetEffectiveScale()
+    if scale~=self.displayScale then self.displayScale=scale;self.panel:SetScale(scale) end
+end
+
 function P:CreatePanel(parent)
-    local panel=CreateFrame("Frame",nil,parent)
-    self.panel=panel;self.root=panel
-    panel:SetAllPoints(parent);panel:SetFrameLevel(parent:GetFrameLevel()+10)
+    -- Wrath can give new children level 128 even when their parent is >128.
+    -- The live panel was observed at 151 with its children at 128, behind
+    -- its opaque backdrop. Keep drawing independent of that
+    -- hierarchy, while anchoring all geometry to the unchanged engine host.
+    local panel=CreateFrame("Frame",nil,UIParent)
+    self.panel=panel;self.root=panel;self.host=parent
+    panel:SetAllPoints(parent);panel:SetFrameStrata(parent:GetFrameStrata());panel:SetFrameLevel(10)
+    panel:SetScale(parent:GetEffectiveScale()/UIParent:GetEffectiveScale())
     surface(panel,false)
     self.panelSerial=(self.panelSerial or 0)+1
+    self.toolsOpen=false
     self.header=CreateFrame("Frame",nil,panel)
     self.header:SetPoint("TOPLEFT",4,-4);self.header:SetPoint("TOPRIGHT",-4,-4);self.header:SetHeight(52)
     self.header:SetBackdrop({bgFile=white})
@@ -293,53 +346,65 @@ function P:CreatePanel(parent)
         parent:StopMovingOrSizing();self.moving=nil
         self:SaveGeometry();self:Relayout()
     end)
-    self.modeLabel=label(self.header,9,gold);self.modeLabel:SetPoint("TOPLEFT",8,-5)
-    self.guideTitle=label(self.header,13);self.guideTitle:SetPoint("TOPLEFT",8,-22)
-    self.guideTitle:SetPoint("RIGHT",-8,0);self.guideTitle:SetHeight(28)
-    self.stepTitle=label(panel,12,gold);self.stepTitle:SetPoint("TOPLEFT",12,-62)
-    self.stepTitle:SetPoint("RIGHT",panel,"RIGHT",-12,0);self.stepTitle:SetHeight(30)
-    self.bearing=label(panel,10,{0.69,0.72,0.66});self.bearing:SetPoint("TOPLEFT",12,-95)
-    self.bearing:SetPoint("RIGHT",panel,"RIGHT",-12,0);self.bearing:SetHeight(26)
-    self.objectives=pane(panel,self.panelSerial,"Objectives");self.action=self.objectives
-    self.objectives:SetPoint("TOPLEFT",12,-126);self.objectives:SetPoint("BOTTOMRIGHT",-30,84)
-    self.objectives.adventure=true
-    self.objectives.rows={}
-    self.objectives.bar=_G[self.objectives:GetName().."ScrollBar"]
-    self.objectives.wheel=self.objectives:GetScript("OnMouseWheel")
-    self.objectives:SetScript("OnVerticalScroll",function(_,offset)
-        self.objectives.offset=offset;self:SecureButtons()
-    end)
-    self.empty=label(panel,12);self.empty:SetPoint("TOPLEFT",12,-128)
-    self.empty:SetPoint("RIGHT",panel,"RIGHT",-30,0)
-    self.position=label(panel,10,gold);self.position:SetPoint("BOTTOMLEFT",12,64)
-    self.storyToggle=button(panel,"Story",132,function() self:ToggleStory() end)
-    self.storyToggle:SetPoint("BOTTOMRIGHT",-10,59)
-    self.storyToggle.label:ClearAllPoints();self.storyToggle.label:SetPoint("CENTER",8,0)
-    self.storyToggle.icon=self.storyToggle:CreateTexture(nil,"ARTWORK")
-    self.storyToggle.icon:SetTexture("Interface\\Icons\\INV_Misc_Book_09")
-    self.storyToggle.icon:SetSize(14,14);self.storyToggle.icon:SetPoint("LEFT",0,0)
-    self.progress=CreateFrame("StatusBar",nil,panel)
-    self.progress:SetPoint("BOTTOMLEFT",12,55);self.progress:SetPoint("BOTTOMRIGHT",-12,55)
-    self.progress:SetHeight(2);self.progress:SetStatusBarTexture(white);self.progress:SetStatusBarColor(unpack(gold))
     self.controls={}
-    for i,spec in ipairs({{"<",28,function(_,b) self:Navigate(-1,b=="RightButton") end},
-        {">",28,function(_,b) self:Navigate(1,b=="RightButton") end},
-        {"Guides",56,function(_,b)
+    for i,value in ipairs({"<",">"}) do
+        local b=button(self.header,value,22,function(_,mouse) self:Navigate(i==1 and -1 or 1,mouse=="RightButton") end)
+        b:SetPoint("TOPLEFT",4+(i-1)*24,-2);self.controls[i]=b
+        ZGV.Parchment:StyleButton(b)
+    end
+    self.position=label(self.header,10,gold);self.position:SetPoint("TOPLEFT",58,-8)
+    self.toolsToggle=button(self.header,"Tools",42,function() self.toolsOpen=not self.toolsOpen;self:Relayout() end)
+    self.toolsToggle:SetPoint("TOPRIGHT",-28,-2);ZGV.Parchment:StyleButton(self.toolsToggle)
+    self.closeGuide=button(self.header,"X",20,function()
+        if self.fixture then self:Stop() else ZGV:ToggleFrame() end
+    end)
+    self.closeGuide:SetPoint("TOPRIGHT",-4,-2);ZGV.Parchment:StyleButton(self.closeGuide,true)
+    tooltip(self.closeGuide,"Hide guide. Use the usual Zygor toggle to show it again.")
+    self.guideTitle=label(self.header,12);self.guideTitle:SetPoint("TOPLEFT",8,-30)
+    self.guideTitle:SetPoint("RIGHT",-8,0);self.guideTitle:SetHeight(18)
+    self.progress=CreateFrame("StatusBar",nil,panel)
+    self.progress:SetFrameLevel(self.header:GetFrameLevel()+1)
+    self.progress:SetPoint("TOPLEFT",8,-28);self.progress:SetPoint("TOPRIGHT",-8,-28)
+    self.progress:SetHeight(2);self.progress:SetStatusBarTexture(white);self.progress:SetStatusBarColor(unpack(gold))
+    self.toolsRow=CreateFrame("Frame",nil,panel)
+    self.toolsRow:SetPoint("TOPLEFT",8,-59);self.toolsRow:SetPoint("TOPRIGHT",-8,-59);self.toolsRow:SetHeight(24)
+    for i,spec in ipairs({{"Guides",56,function(_,b)
             if self.fixture or InCombatLockdown() then return end
             if b=="RightButton" then ZGV:ToggleGuideManagerFrame("home") else ZGV:OpenGuideMenu() end
         end},
         {"Settings",60,function() ZGV:OpenOptions() end},
         {"Existing UI",76,function() self:Stop() end}}) do
-        local b=button(panel,spec[1],spec[2],spec[3]);self.controls[i]=b
-        b:SetPoint("BOTTOMLEFT",i==1 and 8 or (i==2 and 38 or i==3 and 70 or i==4 and 130 or 194),28)
+        local b=button(self.toolsRow,spec[1],spec[2],spec[3]);self.controls[i+2]=b
+        b:SetPoint("TOPLEFT",i==1 and 0 or (i==2 and 58 or 120),0)
     end
+    self.lock=button(self.toolsRow,"Lock",54,function() ZGV:ToggleWindowLock() end)
+    self.lock:SetPoint("TOPLEFT",198,0)
     for i,value in ipairs({"Previous step. Right-click: fast backward.","Next step. Right-click: fast forward.",
         "Choose a guide. Right-click: guide manager.","Guide font, reading size, scale and window lock.","Return to the original interface. Progress is retained."}) do
         tooltip(self.controls[i],value)
     end
-    self.help=label(panel,9,{0.69,0.72,0.66});self.help:SetPoint("BOTTOMLEFT",12,12)
-    self.help:SetText("Drag title to move / corner to resize")
-    self.grip=button(panel,"/",18,function() end);self.grip:SetPoint("BOTTOMRIGHT",-5,5)
+    self.toolsRow:Hide()
+    self.stepTitle=label(panel,12,gold)
+    self.bearing=label(panel,10,{0.69,0.72,0.66})
+    self.objectives=pane(panel,self.panelSerial,"Objectives");self.action=self.objectives
+    self.objectives.adventure=true;self.objectives.rows={}
+    self.objectives.bar=_G[self.objectives:GetName().."ScrollBar"]
+    self.objectives.wheel=self.objectives:GetScript("OnMouseWheel")
+    self.objectives:SetScript("OnVerticalScroll",function(_,offset)
+        self.objectives.offset=offset;self:SecureButtons()
+    end)
+    self.empty=label(panel,12)
+    self.storyToggle=button(panel,"",24,function() self:ToggleStory() end)
+    self.storyToggle:SetHeight(30);ZGV.Parchment:StyleButton(self.storyToggle)
+    self.storyToggle.label:ClearAllPoints();self.storyToggle.label:SetPoint("BOTTOMRIGHT",-1,1)
+    self.storyToggle.icon=self.storyToggle:CreateTexture(nil,"ARTWORK")
+    self.storyToggle.icon:SetTexture("Interface\\Icons\\INV_Misc_Book_09")
+    self.storyToggle.icon:SetSize(16,16);self.storyToggle.icon:SetPoint("CENTER",0,1)
+    tooltip(self.storyToggle,function()
+        return not self.storyFits and "Story: move the guide nearer an edge to make room." or (self.storyCue and "New story. Click to read." or "Story. Click to reread.")
+    end)
+    self.grip=button(panel,"/",18,function() end);self.grip:SetPoint("BOTTOMRIGHT",-3,2)
+    tooltip(self.grip,"Drag to resize the guide and attached story panel.")
     self.grip:SetScript("OnMouseDown",function(_,b)
         if b~="LeftButton" or InCombatLockdown() or ZGV.db.profile.windowlocked then return end
         ZGV.Parchment:ClearSecureButtons(self)
@@ -349,15 +414,17 @@ function P:CreatePanel(parent)
         parent:StopMovingOrSizing();self.sizing=nil;self:SaveGeometry();self:Relayout()
     end)
     local story=CreateFrame("Frame",nil,panel)
-    self.storyPanel=story;surface(story,true)
+    self.storyPanel=story
+    ZGV.Parchment:DecoratePage(story,4)
+    story:EnableMouse(true)
     self.storyTitle=label(story,16,ink);self.storyTitle:SetPoint("TOPLEFT",18,-18)
-    self.storyTitle:SetPoint("RIGHT",story,"RIGHT",-18,0);self.storyTitle:SetHeight(48)
+    self.storyRule=ZGV.Parchment:TitleRule(story)
+    self.closeStory=button(story,"X",20,function() self:FoldStory(false) end)
+    self.closeStory:SetPoint("TOPRIGHT",-8,-8);ZGV.Parchment:StyleButton(self.closeStory,true)
+    tooltip(self.closeStory,"Fold story. The book tab keeps it available to reread.")
     self.storyPane=pane(story,self.panelSerial,"Story")
-    self.storyPane:SetPoint("TOPLEFT",18,-76);self.storyPane:SetPoint("BOTTOMRIGHT",-34,42)
     self.storyText=label(self.storyPane.child,14,ink);self.storyText:SetPoint("TOPLEFT")
     self.storyText:SetSpacing(4)
-    local fold=button(story,"Back to play",120,function() self:FoldStory(false) end)
-    fold.label:SetTextColor(unpack(ink));fold:SetPoint("BOTTOMRIGHT",-14,10)
     story:Hide()
     self.renderCallback=function(snapshot) self:Render(snapshot) end
     panel:SetScript("OnSizeChanged",function() self:Relayout() end)
@@ -403,15 +470,19 @@ function P:Activate(mode)
             if child then self.children[child]=child:IsShown();child:Hide() end
         end
         local host=ZGV.Frame
-        self.hostGeometry={width=host:GetWidth(),height=host:GetHeight(),points={}}
+        self.hostGeometry={width=host:GetWidth(),height=host:GetHeight(),mouse=host:IsMouseEnabled(),points={}}
         for i=1,host:GetNumPoints() do self.hostGeometry.points[i]={host:GetPoint(i)} end
         self.hostGeometry.min={host:GetMinResize()};self.hostGeometry.max={host:GetMaxResize()}
         self:ApplyGeometry(host)
+        -- The higher-level native host must not intercept clicks over the
+        -- independent drawing surface. The header still moves this same host.
+        host:EnableMouse(false)
         self:CreatePanel(host)
         -- Host stays shown and opaque: all engine visibility guards and
         -- pointer hide-with-guide semantics retain their original meaning.
     end
     if mode=="live" then ZGV:SetWaypoint() end -- ask the existing navigator to restore its current target
+    self:SyncHostVisibility()
     self.signature=nil
     self.unsubscribe=ZGV:SubscribePresentation(self.renderCallback)
     self:Publish()
@@ -433,7 +504,7 @@ function P:Stop()
     end
     local mode=self.mode
     if self.panel then
-        self.panel:GetParent():StopMovingOrSizing()
+        self.host:StopMovingOrSizing()
         self:SaveGeometry()
         ZGV.Parchment:ClearSecureButtons(self)
     end
@@ -448,7 +519,7 @@ function P:Stop()
     if self.fixtureHost then self.fixtureHost:Hide();self.fixtureHost=nil end
     for child,shown in pairs(self.children or {}) do if shown then child:Show() end end
     self.children=nil
-    self.root=nil;self.action=nil;self.moving=nil;self.sizing=nil
+    self.root=nil;self.action=nil;self.host=nil;self.displayScale=nil;self.moving=nil;self.sizing=nil
     if mode=="live" then
         local g=self.hostGeometry
         self.hostGeometry=nil
@@ -460,6 +531,7 @@ function P:Stop()
             ZGV.Frame:SetSize(g.width,g.height)
         end
         ZGV:UpdateFrame(true)
+        if g then ZGV.Frame:EnableMouse(g.mouse) end
     end
     self:Publish()
 end
@@ -481,6 +553,7 @@ function P:Refresh()
 end
 
 function P:Tick(elapsed)
+    self:SyncHostVisibility()
     self.layoutElapsed=(self.layoutElapsed or 0)+elapsed
     if self.layoutElapsed>=0.05 then
         self.layoutElapsed=0
@@ -488,7 +561,7 @@ function P:Tick(elapsed)
         if f then
             local key=table.concat({f:GetEffectiveScale(),f:GetLeft() or 0,f:GetBottom() or 0,f:GetWidth(),f:GetHeight(),UIParent:GetWidth(),UIParent:GetHeight(),UIParent:GetEffectiveScale()},":")
             if key~=self.geometryKey then
-                self.geometryKey=key;self:ConstrainGeometry(f:GetParent());self:Relayout()
+                self.geometryKey=key;self:ConstrainGeometry(self.host);self:Relayout()
                 if not InCombatLockdown() and ZGV.ActionButtons_ApplyAnchor then ZGV:ActionButtons_ApplyAnchor() end
             end
             if ZGV.frameNeedsUpdating then self:Refresh() end
@@ -507,7 +580,7 @@ recovery:RegisterEvent("PLAYER_REGEN_DISABLED")
 recovery:SetScript("OnEvent",function(_,event)
     if event=="PLAYER_REGEN_DISABLED" then
         if P.panel and (P.moving or P.sizing) then
-            P.panel:GetParent():StopMovingOrSizing();P.moving=nil;P.sizing=nil;P:SaveGeometry()
+            P.host:StopMovingOrSizing();P.moving=nil;P.sizing=nil;P:SaveGeometry()
         end
         P:FoldStory(true)
     elseif P.pendingStop then P:Stop()

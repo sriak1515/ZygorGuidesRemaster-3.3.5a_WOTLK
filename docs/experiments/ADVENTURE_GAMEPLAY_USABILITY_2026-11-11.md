@@ -2,6 +2,8 @@
 
 Branch: `codex/adventure-gameplay-usability`.
 Base: `f8b8a2a` on `experiments/adventure-vertical-slice-2026-11-11`, fetched before branching.
+Follow-up: [live rendering fix and compact controls, 2026-11-13](ADVENTURE_LIVE_FIX_AND_POLISH_2026-11-13.md) supersedes the layout and parenting details below.
+
 Experimental test build for WoW 3.3.5a, not a stable release. Package BUILD.txt
 identifies its exact source commit. No campaign content or server changes.
 

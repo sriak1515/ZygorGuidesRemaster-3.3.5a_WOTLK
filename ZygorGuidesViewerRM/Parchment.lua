@@ -229,6 +229,11 @@ local function metalButton(control, close)
     control:SetBackdropBorderColor(0.88,0.77,0.52,1)
 end
 
+-- Share the existing Warcraft button treatment with the adventure viewer.
+function P:StyleButton(control,close)
+    metalButton(control,close)
+end
+
 function P:CreatePane(parent)
     local pane = CreateFrame("ScrollFrame",nil,parent)
     pane:EnableMouse(true)
@@ -609,8 +614,8 @@ function P:SecureButtons(owner)
     if not owner.secure then
         owner.secure=CreateFrame("Frame",owner==self and "ZGVParchmentSecureRoot" or "ZGVAdventureSecureRoot",UIParent,"SecureHandlerStateTemplate")
         owner.secure:SetAllPoints(UIParent)
-        owner.secure:SetFrameStrata(ZGV.Frame:GetFrameStrata())
-        owner.secure:SetFrameLevel(ZGV.Frame:GetFrameLevel()+80)
+        owner.secure:SetFrameStrata(owner.root:GetFrameStrata())
+        owner.secure:SetFrameLevel(owner==self and ZGV.Frame:GetFrameLevel()+80 or owner.root:GetFrameLevel()+40)
         owner.secure.buttons={}
         -- Never leave absolute-coordinate click targets over a scrolling viewer
         -- during lockdown. No secure attributes or anchors are changed in combat.

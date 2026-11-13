@@ -5,7 +5,7 @@ local Frame={};Frame.__index=Frame
 local frames={}
 local combat=false
 local function frame(parent)
-    local f=setmetatable({parent=parent,shown=true,alpha=1,w=360,h=440,scripts={},children={}},Frame)
+    local f=setmetatable({parent=parent,shown=true,alpha=1,w=360,h=440,scripts={},children={},level=math.min(128,(parent and parent:GetFrameLevel() or 0)+1)},Frame)
     if parent then parent.children[#parent.children+1]=f end
     frames[#frames+1]=f;return f
 end
@@ -20,17 +20,21 @@ function Frame:GetName() return self.name end
 function Frame:GetChildren() return unpack(self.children) end
 function Frame:SetScript(k,v) self.scripts[k]=v end
 function Frame:SetSize(w,h) self.w,self.h=w,h end
-function Frame:GetWidth() return self.allpoints and self.parent:GetWidth() or self.w end
+function Frame:GetWidth() return self.allpoints and self.allpoints:GetWidth() or self.w end
 function Frame:SetWidth(w) self.w=w end
 function Frame:SetHeight(h) self.h=h end
 function Frame:SetText(s) self.text=s end
-function Frame:GetHeight() return self.allpoints and self.parent:GetHeight() or self.h end
+function Frame:GetHeight() return self.allpoints and self.allpoints:GetHeight() or self.h end
 function Frame:GetStringHeight()
     return math.max(1,math.ceil(#(self.text or "")/math.max(1,self:GetWidth()/((self.fontsize or 13)*0.5))))*(self.fontsize or 13)*1.4
 end
 function Frame:SetFont(font,size) self.font,self.fontsize=font,size;return true end
 function Frame:GetFont() return self.font or "test-font",self.fontsize or 13 end
-function Frame:GetFrameLevel() return 1 end
+function Frame:GetFrameLevel() return self.level end
+function Frame:SetFrameLevel(value) self.level=value end
+function Frame:SetAlpha(value) self.alpha=value end
+function Frame:EnableMouse(value) self.mouse=value end
+function Frame:IsMouseEnabled() return self.mouse or false end
 function Frame:GetEffectiveScale() return (self.scale or 1)*(self.parent and self.parent:GetEffectiveScale() or 1) end
 function Frame:GetLeft() return self.left or 900 end
 function Frame:GetBottom() return self.bottom or 160 end
@@ -45,11 +49,14 @@ function Frame:StartMoving() self.moving=true end
 function Frame:StartSizing() self.sizing=true end
 function Frame:StopMovingOrSizing() self.moving=nil;self.sizing=nil end
 function Frame:SetAttribute(k,v) assert(not combat,"secure mutation in combat");self.attributes=self.attributes or {};self.attributes[k]=v end
-function Frame:SetScale(v) self.scale=v end
+function Frame:SetScale(v)
+    local changed=self.scale~=v;self.scale=v
+    if changed and self.scripts.OnSizeChanged then self.scripts.OnSizeChanged(self) end
+end
 function Frame:GetValue() return self.value or 0 end
 function Frame:GetFrameStrata() return "MEDIUM" end
 function Frame:CreateTexture() return frame(self) end
-function Frame:SetAllPoints() self.allpoints=true end
+function Frame:SetAllPoints(target) self.allpoints=target or self.parent end
 function Frame:SetMinMaxValues(lo,hi) self.lo,self.hi=lo,hi end
 function Frame:SetValue(value)
     self.value=value
@@ -62,7 +69,7 @@ end
 function Frame:CreateFontString() return frame(self) end
 function Frame:SetPoint(...) self.point={...} end
 function Frame:ClearAllPoints() self.point=nil end
-for _,k in ipairs({"SetStatusBarTexture","SetStatusBarColor","SetDesaturated","RegisterForClicks","RegisterForDrag","SetMovable","SetResizable","SetFrameStrata","SetVertexColor","SetTexCoord","SetFrameLevel","SetAlpha","SetBackdropBorderColor","SetHighlightTexture","SetTexture","SetClampedToScreen","EnableMouseWheel","UpdateScrollChildRect","SetTextColor","SetJustifyV","SetSpacing","SetBackdrop","SetBackdropColor","EnableMouse","SetScrollChild","SetJustifyH","RegisterEvent"}) do Frame[k]=function() end end
+for _,k in ipairs({"SetStatusBarTexture","SetStatusBarColor","SetDesaturated","RegisterForClicks","RegisterForDrag","SetMovable","SetResizable","SetFrameStrata","SetVertexColor","SetTexCoord","SetBackdropBorderColor","SetHighlightTexture","SetTexture","SetClampedToScreen","EnableMouseWheel","UpdateScrollChildRect","SetTextColor","SetJustifyV","SetSpacing","SetBackdrop","SetBackdropColor","SetScrollChild","SetJustifyH","RegisterEvent"}) do Frame[k]=function() end end
 UIParent=frame()
 UIParent:SetSize(1920,1080)
 STANDARD_TEXT_FONT="test-font"
@@ -97,12 +104,13 @@ local ZGV={DIR="test-addon",Frame=frame(UIParent),db={char={guides_history={},gu
     LastSkip=1,frameNeedsResizing=0,CurrentGuideName="test-guide",CurrentStepNum=1,completionelapsed=10,completioninterval=0.1,
     completionintervallong=0.5,completionintervalmin=0.01,recentlyCompletedGoals={}}
 ZygorGuidesViewer=ZGV
+ZGV.Frame:EnableMouse(true)
 local visual=frame(ZGV.Frame)
 local hidden=frame(ZGV.Frame);hidden:Hide()
 local count,waypoints=0,0
 ZGV.Print=function(_,s) print(s) end
 ZGV.SetWaypoint=function() waypoints=waypoints+1 end
-for _,k in ipairs({"Debug","ClearRecentActivities","StopFlashAnimation","ScrollToCurrentStep","UpdateCooldowns","UpdateCartographerExport","AnimateGears"}) do ZGV[k]=function() end end
+for _,k in ipairs({"Debug","ClearRecentActivities","StopFlashAnimation","ScrollToCurrentStep","InlineButtons_SuspendSecureOverlays","UpdateCooldowns","UpdateCartographerExport","AnimateGears"}) do ZGV[k]=function() end end
 ZGV.InlineButtonsEnabled=function() return false end
 ZGV.IsRemasterSkin=function() return false end
 ZGV.UpdateFrame=function(self) count=count+1;if self.Presentation then self.Presentation:Publish() end end
@@ -166,7 +174,19 @@ ZGV.CurrentStep.goals[1].progress=1
 ZGV.Frame:Hide();ZGV:TryToCompleteStep(true);assert(ZGV.CurrentStepNum==1)
 ZGV.Frame:Show();ZGV.Frame.alpha=0;ZGV:TryToCompleteStep(true);assert(ZGV.CurrentStepNum==1)
 ZGV.Frame.alpha=1
+-- Client regression: panel 151, children 128 (host 141 inferred from +10).
+-- Model the observed child-level cap, not pixel rendering or all Wrath internals.
+ZGV.Frame:SetFrameLevel(141)
 P:Start("live")
+assert(P.header:GetFrameLevel()>P.panel:GetFrameLevel(),"client regression: header behind opaque panel")
+assert(P.objectives:GetFrameLevel()>P.panel:GetFrameLevel(),"client regression: objectives behind opaque panel")
+assert(P.grip:GetFrameLevel()>P.panel:GetFrameLevel(),"client regression: controls behind opaque panel")
+assert(P.panel:GetParent()==UIParent and P.host==ZGV.Frame)
+assert(not ZGV.Frame:IsMouseEnabled() and P.panel:IsMouseEnabled(),"invisible native host intercepts clicks")
+assert(P.progress:GetFrameLevel()>P.header:GetFrameLevel(),"top progress strip is behind header fill")
+local level=P.panel:GetFrameLevel()
+ZGV.Frame:SetFrameLevel(180);P:Relayout()
+assert(P.panel:GetFrameLevel()==level and P.header:GetFrameLevel()>level,"engine promotion changed display ordering")
 assert(ZGV.Frame:IsVisible() and ZGV.Frame:GetAlpha()==1 and not visual:IsShown())
 local oldRenderCount=count
 ZGV.frameNeedsUpdating=true
@@ -183,6 +203,7 @@ local nativeSkip=ZGV.SkipStep
 local activeGuide,activeStep=ZGV.CurrentGuide,ZGV.CurrentStep
 P:Stop()
 assert(visual:IsShown() and not hidden:IsShown() and ZGV.CurrentGuide==activeGuide and ZGV.CurrentStep==activeStep)
+assert(ZGV.Frame:IsMouseEnabled(),"fallback lost original host mouse handling")
 -- Fixtures do not select a guide, invoke SkipStep or alter native state/cache/db.
 local persisted=ZGV.db.char.step
 ZGV.SkipStep=function() error("fixture called real SkipStep") end
@@ -206,6 +227,12 @@ end
 P:Start("fixture")
 assert(P.panel and P.fixtureHost:GetHeight()==360 and #P.objectives.rows==5)
 assert(P.storyOpen and P.storyPanel:IsVisible() and P.storyEntry.id=="oben-request")
+assert(not P.storyToggle:IsShown(),"open story should not leave a second fold control")
+assert(P.storyPanel.point[4]==-4 and P.storyPanel.paper and P.storyRule,"reuse parchment material with a narrow gutter")
+P.closeStory.scripts.OnClick()
+assert(not P.storyPanel:IsShown() and P.storyToggle:IsShown(),"close must leave a book tab for rereading")
+P.storyToggle.scripts.OnClick()
+assert(P.storyPanel:IsShown() and not P.storyToggle:IsShown())
 assert(P.objectives.rows[5].hint.text:find("Shamans"))
 local requestBody=P.storyText.text
 P:FixtureCommand("story")
@@ -229,6 +256,10 @@ P:FixtureCommand("goal 5");P:FixtureCommand("story")
 assert(P.storyEntry.id=="oben-revelation" and P.storyOpen)
 assert(P.objectives.rows[5].text.text=="Release Oben's spirit")
 assert(P.panel:GetWidth()==fixedWidth and P.panel:GetHeight()==fixedHeight,"story reflowed guide")
+local short=P:Snapshot();short.context.body="A short retained passage."
+P:Render(short)
+assert(P.storyPanel:GetHeight()<P.panel:GetHeight(),"short story still requires a full-height page")
+P:Publish();P:Render(P:Snapshot())
 P:FixtureCommand("combat");assert(not P.storyOpen and P.storyCue)
 P:FixtureCommand("peace");assert(not P.storyOpen)
 P:FixtureCommand("reset");assert(P.storyEntry.id=="oben-request")
@@ -302,6 +333,14 @@ for _,name in ipairs({"RefreshAutoHideBorderState","ForceHideBorderNow"}) do
     assert(loadstring("local ZGV=...;"..body))(ZGV)
     ZGV[name](ZGV) -- must return without touching hidden native chrome
 end
+-- Execute native visibility callbacks: the drawing surface no longer inherits
+-- host visibility, so hiding/showing the guide must explicitly synchronize it.
+local nativeSkin=ZGV.IsRemasterSkin
+ZGV.IsRemasterSkin=function() return true end
+for _,name in ipairs({"Frame_OnHide","Frame_OnShow"}) do
+    local body=assert(source:match("function me:"..name.."%b()%s*\n.-\nend"),name)
+    assert(loadstring("local me,ZGV=...;local PlaySound=function() end;local GetTime=function() return 0 end;"..body))(ZGV,ZGV)
+end
 local row=P.objectives.rows[1]
 assert(row.goal==item and row.inlineActionSpec==item.spec)
 -- Supply viewport/holder coordinates explicitly; this double does not lay out anchors.
@@ -312,10 +351,14 @@ P:SecureButtons()
 assert(P.secure.driver=="[combat] hide; show")
 assert(P.secure.buttons[1].attributes.type=="item" and P.secure.buttons[1].attributes.item=="item:123")
 assert(P.secure.buttons[2].attributes.type=="spell" and P.secure.buttons[2].attributes.spell=="Test spell")
-ZGV.Frame:Hide();P.panel.scripts.OnHide()
+ZGV.Frame:Hide();ZGV:Frame_OnHide();P.panel.scripts.OnHide()
+assert(not P.panel:IsVisible())
 assert(not P.secure.buttons[1]:IsShown(),"hidden guide retained an item target")
-ZGV.Frame:Show();P:SecureButtons()
+ZGV.Frame:Show();ZGV.preparedFrameShow=true;ZGV:Frame_OnShow();P:SecureButtons()
+assert(P.panel:IsVisible())
+ZGV.IsRemasterSkin=nativeSkin
 assert(P.secure.buttons[1]:IsShown())
+assert(P.secure.buttons[1]:GetFrameLevel()>P.secure:GetFrameLevel() and P.secure:GetFrameLevel()<128,"secure controls inherited high engine levels")
 row.actionHolder.top=620;row.actionHolder.bottom=598
 P:SecureButtons()
 assert(P.secure.buttons[1].actionSpec==spell.spec and not P.secure.buttons[2]:IsShown(),"clipped item retained a target")
@@ -357,8 +400,16 @@ assert(P:Settings().width==280 and P:Settings().height==280)
 ZGV.Frame:SetSize(560,720);ZGV.Frame:SetScale(2)
 P:Tick(0.05)
 assert(ZGV.Frame:GetHeight()==524,"large guide must fit scaled screen")
+assert(P.panel:GetEffectiveScale()==ZGV.Frame:GetEffectiveScale(),"independent display lost window scale")
 ZGV.Frame:SetScale(1);ZGV.Frame:SetSize(280,280);P:Relayout()
-assert(P.controls[5]:IsVisible() and P.objectives:IsVisible())
+assert(not P.controls[5]:IsVisible() and P.objectives:IsVisible(),"utilities should fold out of the objective area")
+assert(P.objectiveTop<126 and P.help==nil,"normal play still reserves the old title/footer space")
+local normalTop=P.objectiveTop
+P.toolsToggle.scripts.OnClick()
+assert(P.controls[5]:IsVisible() and P.objectiveTop==normalTop+26)
+P.toolsToggle.scripts.OnClick()
+assert(not P.controls[5]:IsVisible() and P.objectiveTop==normalTop)
+P.toolsToggle.scripts.OnClick()
 -- Existing font settings re-render native row labels; story uses reading size.
 ZGV.db.profile.fontsize=19;ZGV.db.profile.fontsecsize=15
 P:Relayout();assert(P.objectives.rows[1].label.fontsize==19)
@@ -377,6 +428,15 @@ P.controls[3].scripts.OnClick(nil,"LeftButton")
 assert(menuAnchor==P.header and opened,"guide selection did not use native menu")
 ZGV.ToggleGuideManagerFrame=function(_,section) opened=section end
 P.controls[3].scripts.OnClick(nil,"RightButton");assert(opened=="home")
+local navigate=ZGV.SkipStep
+ZGV.SkipStep=function(_,delta,fast) opened={delta,fast} end
+P.controls[1].scripts.OnClick(nil,"RightButton");assert(opened[1]==-1 and opened[2])
+P.controls[2].scripts.OnClick(nil,"LeftButton");assert(opened[1]==1 and not opened[2])
+ZGV.SkipStep=navigate
+local nativeLock=assert(source:match("function me:ToggleWindowLock%b()%s*\n.-\nend"))
+assert(loadstring("local me=...;"..nativeLock))(ZGV)
+P.lock.scripts.OnClick();assert(ZGV.db.profile.windowlocked and not P.grip:IsShown())
+P.lock.scripts.OnClick();assert(not ZGV.db.profile.windowlocked and P.grip:IsShown())
 ZGV.OpenOptions=function() opened="settings" end
 P.controls[4].scripts.OnClick();assert(opened=="settings")
 local saved=ZGV.db.profile.adventure
@@ -419,6 +479,7 @@ ZGV.Frame:Hide();assert(not permitted(arrow) and not arrow:IsShown())
 ZGV.Frame:Show();profile.arrowshow=false;assert(not permitted(arrow))
 profile.arrowshow=true;assert(permitted(arrow))
 assert(arrow:GetParent()==UIParent and arrow.waypoint==oldWaypoint)
+print("PASS layering regression: observed live parent/child levels reproduce the fault; independent drawing, scale and native visibility callbacks preserve controls")
 print("PASS gameplay simulation: native item/spell/confirm/menu bindings, secure clipping/combat policy, movement/resize/lock/fonts/persistence/fallback and arrow guards")
 -- Genuine passage rendered through the same snapshot and panel, with simulated
 -- quest-cache evidence here; test_banethil_story executes the real cache hooks.

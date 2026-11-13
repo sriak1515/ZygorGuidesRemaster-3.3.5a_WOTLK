@@ -8208,6 +8208,7 @@ function me:Frame_OnShow()
 	end
 	--]]
 	self.db.profile.visible = not not self.Frame:IsVisible()
+	if self.Presentation and self.Presentation.mode=="live" then self.Presentation:SyncHostVisibility() end
 	if self.preparedFrameShow then
 		self.preparedFrameShow = nil
 	else
@@ -8264,6 +8265,7 @@ end
 function me:Frame_OnHide()
 	PlaySound("igQuestLogClose")
 	self.db.profile.visible = not not self.Frame:IsVisible()
+	if self.Presentation and self.Presentation.mode=="live" then self.Presentation:SyncHostVisibility() end
 	if not InCombatLockdown() then
 		self:InlineButtons_SuspendSecureOverlays()
 		for _,stepframe in ipairs(self.stepframes or {}) do
