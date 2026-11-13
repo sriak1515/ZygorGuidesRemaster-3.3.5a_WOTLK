@@ -262,3 +262,44 @@ without execution. The control study passed structural checks and JavaScript
 open/close, seam folding, opacity and state-restoration checks with DOM doubles.
 There is no browser in this executor, so layout has not been visually inspected;
 this is a concept comparison, not proof of browser or WoW appearance/hit testing.
+
+## Discussion follow-up — compiler sequence and edge control
+
+**Agreed edge behavior, from the owner's follow-up:** retain the general tall,
+attached shape, make it much more subtle, and hide it completely while the Story
+leaf is open. The existing leaf close action restores the folded handle. This
+supersedes the earlier open-seam toggle alternative. Exact shape, opacity, width,
+hover response and any new-arrival accent remain visual proposals. The revised
+study starts with a 12% fill and 20-pixel edge as comparison values, not addon
+settings or approved native dimensions. Its text/content is synthetic.
+
+**Compiler clarification:** there is no Guide Format v1 compiler yet. The legacy
+Markdown content builder reviewed above is reusable infrastructure, not a working
+v1 translator or a completed narrative interface.
+
+**Recommended sequence, still a proposal:**
+
+1. Agree the minimum sidecar contract and native anchor/mapping semantics with the
+   addon consumer. Reuse the v1 source format without adding fields for UI policy.
+2. Build a small compiler pilot for the matched route-only/narrated examples:
+   validate source and references, translate their supported gameplay into native
+   Zygor Lua, emit a declarative sidecar and provenance, and explicitly reject
+   unsupported mappings. Adding narration must not change executable gameplay.
+3. Develop the minimal addon consumer against those exact outputs: real evidence
+   adapters, qualified anchors, per-type presentation, pending versus presented
+   persistence, and first-presented Journal recall through the existing reader.
+   A small synthetic competing-passage case exercises ordering before expansion.
+4. Expand compiler coverage only after the native parser/goal behavior and narrative
+   lifecycle tests pass. A full compiler built independently of its consumer would
+   leave important mapping and timing assumptions untested.
+
+Starting with this compiler/consumer handshake is recommended. It does not require
+waiting for a complete compiler, finishing the visual redesign first, replacing
+Zygor, converting active chapters or resetting the player's current guide.
+
+**Work ownership clarification:** the owner explicitly instructed that compiler
+implementation must not be created in this chat. Compiler work belongs elsewhere;
+this chat supplies addon requirements/interface feedback and UX studies. No compiler
+or addon runtime code was added or changed. The revised edge interaction passed
+DOM-double checks for subtle defaults, hiding while open, close/recall, focus,
+opacity and state restoration. Browser/WoW appearance remains unverified.
