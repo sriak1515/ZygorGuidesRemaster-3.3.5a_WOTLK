@@ -303,3 +303,13 @@ this chat supplies addon requirements/interface feedback and UX studies. No comp
 or addon runtime code was added or changed. The revised edge interaction passed
 DOM-double checks for subtle defaults, hiding while open, close/recall, focus,
 opacity and state restoration. Browser/WoW appearance remains unverified.
+
+## Subsequent compiler review
+
+The owner subsequently authorized a subagent to review the completed compiler and
+run it for representative output. See [the actual output review](COMPILER_OUTPUT_REVIEW_2026-11-13.md).
+The emitted campaign-owned interface uses one interface_version=1 without capability
+negotiation, superseding this note's earlier speculative capability-list fields.
+Compiler/source code was not changed. The main remaining work is the addon metadata
+consumer and verified native binding/anchor lifecycle; generated output alone does
+not demonstrate a playable client integration.
