@@ -184,13 +184,14 @@ function A.New(metadata,char)
     local function checkpointRevision(checkpoint)
         if checkpointHashes[checkpoint.id] then return checkpointHashes[checkpoint.id] end
         local revision=ZGV:CampaignPayloadHash(canonical({guide=metadata.guide.id,id=checkpoint.id,
-            at_step=checkpoint.at_step,proof=checkpoint.proof}))
+            at_step=checkpoint.at_step,proof=checkpoint.proof,scope=metadata.runtime_scope_hash}))
         checkpointHashes[checkpoint.id]=revision
         return revision
     end
     function controller:ObserveCheckpoints(facts)
         for _,checkpoint in ipairs(metadata.checkpoints or {}) do
-            if evaluate(checkpoint.proof,facts)==true then
+            if (not metadata.runtime_scope_hash or metadata.runtime_checkpoint_access and metadata.runtime_checkpoint_access(checkpoint)==true)
+                and evaluate(checkpoint.proof,facts)==true then
                 local root=char.campaignCheckpoints
                 if root==nil then root={version=1,guides={}};char.campaignCheckpoints=root end
                 if type(root)=='table' and root.version==1 and type(root.guides)=='table' then

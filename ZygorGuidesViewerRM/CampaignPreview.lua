@@ -12,6 +12,53 @@ local function call(fn,...)
     local ok,a,b=pcall(fn,...);if ok then return a,b end
 end
 local function scalar(v) return type(v)=='string' and #v>0 end
+-- Preview Policy Contract 1, pinned to compiler ef1ac7f. Validate the
+-- identity domain before serializing; Lua's quoting/order are protocol bytes.
+local function canonical(value)
+    if type(value)~='table' then return type(value)..':'..string.format('%q',tostring(value)) end
+    local keys,parts={},{}
+    for k in pairs(value) do keys[#keys+1]=k end
+    table.sort(keys,function(a,b)if type(a)~=type(b)then return type(a)<type(b)end;return a<b end)
+    for _,key in ipairs(keys) do parts[#parts+1]=canonical(key)..'='..canonical(value[key]) end
+    return '{'..table.concat(parts,';')..'}'
+end
+local function utf8(value)
+    local i=1
+    while i<=#value do
+        local a,b=value:byte(i,i+1)
+        local n=a<128 and 1 or a>=194 and a<=223 and 2 or a>=224 and a<=239 and 3 or a>=240 and a<=244 and 4
+        assert(n)
+        for j=1,n-1 do local byte=value:byte(i+j);assert(byte and byte>=128 and byte<=191) end
+        assert(not (a==224 and b<160 or a==237 and b>159 or a==240 and b<144 or a==244 and b>143))
+        i=i+n
+    end
+end
+local function identityValue(value,seen,depth)
+    assert(depth<=32)
+    local kind=type(value)
+    if kind=='string' then utf8(value);return end
+    if kind=='boolean' then return end
+    if kind=='number' then assert(value>=0 and value<=2147483647 and value==math.floor(value));return end
+    assert(kind=='table' and not getmetatable(value) and not seen[value]);seen[value]=true
+    local mode,count=nil,0
+    for key,child in pairs(value) do
+        local kt=type(key);assert(kt=='string' or kt=='number')
+        assert(not mode or mode==kt);mode=kt;count=count+1
+        if kt=='string' then assert(key:match('^[A-Za-z0-9][A-Za-z0-9._/-]*$'))
+        else assert(key>=1 and key<=2147483647 and key==math.floor(key)) end
+        identityValue(child,seen,depth+1)
+    end
+    if mode=='number' then for i=1,count do assert(value[i]~=nil) end end
+    seen[value]=nil
+end
+function P:PolicyIdentity(policy)
+    identityValue(policy,{},0)
+    assert(type(policy)=='table' and policy.policy_version==1 and policy.provisional==true)
+    assert(policy.policy_sha256==nil and policy.policy_format_version==nil)
+    assert(ZGV.CampaignData:PreviewTools().hash(policy.source_sha256))
+    local bytes=canonical({source=policy.source_sha256,policy=policy,version=1})
+    return ZGV:CampaignPayloadHash(bytes),bytes
+end
 local function truth(condition,facts)
     return ZGV.CampaignAdmission.Evaluate(condition,facts)
 end
@@ -364,7 +411,25 @@ function P:Register(report,policy)
     local tools=C:PreviewTools()
     local ok,data=pcall(tools.copy,report,{}, {n=0,bytes=0},0)
     if not ok then return false,'invalid-preview' end
-    local good,config=pcall(tools.copy,policy or {locked=true,policy_version=P.PolicyVersion,provisional=true},{},{n=0,bytes=0},0)
+    -- Omitted policy means the compiler's locked definition, never a default
+    -- activating policy. Its identity is still checked against the report.
+    local function lockedPolicy()
+        assert(type(data.provenance)=='table' and type(data.source_integration)=='table'
+            and type(data.source_integration.producer_candidates)=='table')
+        local locked={locked=true,policy_version=1,provisional=true,source_sha256=data.provenance.source_sha256,
+            step_conditions=data.source_integration.step_conditions,passages={}}
+        for id,rule in pairs(data.source_integration.producer_candidates) do
+            assert(type(rule)=='table' and rule.authorizing==false)
+            locked.passages[id]={anchor=rule.anchor,view_index=rule.view_index,producers=rule.producers}
+        end
+        return locked
+    end
+    if policy==nil then
+        local derived,value=pcall(lockedPolicy)
+        if not derived then return false,'invalid-preview-definition' end
+        policy=value
+    end
+    local good,config=pcall(tools.copy,policy,{},{n=0,bytes=0},0)
     if not good then return false,'invalid-policy' end
     local validated,shared,list=pcall(function()
         assert(config.policy_version==P.PolicyVersion and config.provisional==true)
@@ -377,11 +442,21 @@ function P:Register(report,policy)
             for _,id in ipairs(data.guide.requires_checkpoints) do assert(scalar(id) and not seen[id]);seen[id]=true end
         end
         assert(type(data.provenance)=='table' and tools.hash(data.provenance.source_sha256))
+        assert(config.source_sha256==data.provenance.source_sha256 and type(config.locked)=='boolean')
+        if config.locked then assert(canonical(config)==canonical(lockedPolicy())) end
+        assert(type(config.step_conditions)=='table' and type(config.passages)=='table')
+        assert(type(data.source_integration)=='table' and type(data.source_integration.step_conditions)=='table')
+        assert(canonical(config.step_conditions)==canonical(data.source_integration.step_conditions))
+        local policyHash=self:PolicyIdentity(config)
+        local identity=data.policy_identity
+        assert(type(identity)=='table' and identity.policy_version==1 and identity.source_sha256==config.source_sha256
+            and identity.policy_sha256==policyHash)
         assert(tools.array(data.views) and #data.views>=1 and #data.views<=2)
         if not config.locked then
             assert(type(config.gates)=='table' and tools.array(config.entry_gates) and #config.entry_gates>0)
             assert(tools.array(config.return_gates) and #config.return_gates>0 and tools.array(config.roster) and #config.roster==5)
             assert(config.source_sha256==data.provenance.source_sha256)
+            assert(type(config.min_level)=='number')
             assert(scalar(config.return_owner) and scalar(config.return_checkpoint) and tools.array(config.return_quests) and #config.return_quests>0)
             for _,q in ipairs(config.return_quests) do assert(type(q)=='number' and q>=1 and q==math.floor(q)) end
         end
@@ -409,18 +484,9 @@ function P:Register(report,policy)
             assert(config.pause.dispatch_registration==nil or scalar(config.pause.dispatch_registration))
             assert(config.pause.dispatch_step==nil or type(config.pause.dispatch_step)=='number' and config.pause.dispatch_step>=1 and config.pause.dispatch_step==math.floor(config.pause.dispatch_step))
         end
-        local function canonical(value)
-            if type(value)~='table' then return type(value)..':'..string.format('%q',tostring(value)) end
-            local keys,parts={},{}
-            for k in pairs(value) do keys[#keys+1]=k end
-            table.sort(keys,function(a,b)if type(a)~=type(b)then return type(a)<type(b)end;return a<b end)
-            for _,key in ipairs(keys) do parts[#parts+1]=canonical(key)..'='..canonical(value[key]) end
-            return '{'..table.concat(parts,';')..'}'
-        end
-        local policyHash=ZGV:CampaignPayloadHash(canonical({source=data.provenance.source_sha256,policy=config,version=P.PolicyVersion}))
         local metadata={guide=data.guide,narration={},checkpoints={},encounter_sources={},recovery={},runtime_scope_hash=ZGV:CampaignPayloadHash(data.provenance.source_sha256..policyHash)}
         local state={metadata=metadata,policy=config,source_sha256=data.provenance.source_sha256,policy_sha256=policyHash,views={}}
-        local allSteps,allPassages,allGoals={}, {}, {}
+        local allSteps,allPassages,allGoals,conditions={}, {}, {}, {}
         local previous=0
         for index,v in ipairs(data.views) do
             assert(v.view_index==index-1 and type(v.native_text)=='string' and tools.hash(v.payload_sha256) and ZGV:CampaignPayloadHash(v.native_text)==v.payload_sha256)
@@ -432,6 +498,7 @@ function P:Register(report,policy)
             for i,s in ipairs(v.steps) do
                 assert(s.source_path=='/steps/'..(v.source_range[1]+i-1) and tools.array(s.native_parts) and #s.native_parts==1 and scalar(s.source_step_id) and not allSteps[s.source_step_id])
                 assert(s.native_parts[1]==s.source_step_id);allSteps[s.source_step_id]=true;ids[s.source_step_id]=true
+                if s.only_if~=nil then tools.predicate(s.only_if);conditions[s.source_step_id]=s.only_if end
             end
             for _,m in ipairs(v.goals) do
                 local g=m.source_goal
@@ -479,6 +546,15 @@ function P:Register(report,policy)
             state.views[index]=r
         end
         table.sort(metadata.narration,function(a,b)return a.source_order<b.source_order end)
+        assert(canonical(conditions)==canonical(config.step_conditions))
+        metadata.runtime_checkpoint_access=function(checkpoint)
+            for _,r in ipairs(state.views) do
+                for _,candidate in ipairs(r.view.checkpoints) do
+                    if candidate==checkpoint then return r.state=='bound' and r.guide~=nil and P:CanAccess(r.guide) end
+                end
+            end
+            return false
+        end
         if config.pause then assert(#state.views==2 and config.pause.at_step==state.views[1].view.steps[#state.views[1].view.steps].source_step_id) end
         for step in pairs(config.step_gates or {}) do assert(allSteps[step]) end
         for step,c in pairs(config.step_conditions or {}) do assert(allSteps[step]);tools.predicate(c) end

@@ -46,7 +46,7 @@ ZGV.db.profile.waypointaddon='test'
 local waypoint=assert(read(root..'/Waypoints.lua'):match('function me:SetWaypoint%b()%s*\n.-\nend'))
 assert(loadstring('local me,ZGV=...;'..waypoint))(ZGV,ZGV)
 local report=assert(loadfile('tools/presentation/fixtures/preview/synthetic.lua'))()
-local policy={policy_version=1,provisional=true,source_sha256=report.provenance.source_sha256,return_owner='interlude-owner',return_checkpoint='INTERLUDE.OBSERVED',return_quests={900},roster={'A','B','C','D','E'},min_level=18,
+local policy={policy_version=1,provisional=true,locked=false,source_sha256=report.provenance.source_sha256,return_owner='interlude-owner',return_checkpoint='INTERLUDE.OBSERVED',return_quests={900},roster={'A','B','C','D','E'},min_level=18,
  gates={prior={owner='prior-owner',kind='external-checkpoint',checkpoint_id='PREVIOUS.FULL'},entry={owner='prior-owner',kind='predecessor-and-party'},returned={owner='interlude-owner',kind='return-and-readiness'},pause={owner='campaign-owner',kind='full-pause'},combat={owner='mechanics-owner',kind='combat-readiness'}},
  entry_gates={'prior','entry'},return_gates={'returned'},step_gates={['TEST/kill']={'combat'}},
  step_conditions={['TEST/conditional']={['not']={quest_rewarded=908}}},
@@ -55,12 +55,20 @@ local policy={policy_version=1,provisional=true,source_sha256=report.provenance.
  accepted={anchor='TEST/start',view_index=0},earned={anchor='TEST/earned',view_index=0,producers={'TEST/producer'},recover_reward=true},
  paused={anchor='TEST/pause',view_index=0,activation=true},returned={anchor='TEST/return',view_index=1,activation=true}}}
 local copy=C:PreviewTools().copy
+-- A reviewed activating definition must have its own external identity. This
+-- synthetic signing helper is not an owner-evidence provider.
+local function identify(r,p)
+ r.policy_identity={policy_version=1,source_sha256=p.source_sha256,policy_sha256=P:PolicyIdentity(p)}
+end
+identify(report,policy)
 local versioned=copy(policy,{},{n=0,bytes=0},0);versioned.policy_version=2
 assert(not C:RegisterPreview(report,versioned),'unknown policy version accepted')
 local invalid=copy(policy,{},{n=0,bytes=0},0);invalid.entry_gates={'entry'}
-assert(not C:RegisterPreview(report,invalid),'predecessor declaration weakened by readiness flag')
+local invalidReport=copy(report,{},{n=0,bytes=0},0);identify(invalidReport,invalid)
+assert(not C:RegisterPreview(invalidReport,invalid),'predecessor declaration weakened by readiness flag')
 invalid=copy(policy,{},{n=0,bytes=0},0);invalid.passages.returned.producers={'TEST/producer'}
-assert(not C:RegisterPreview(report,invalid),'cross-view producer leaked return eligibility')
+identify(invalidReport,invalid)
+assert(not C:RegisterPreview(invalidReport,invalid),'cross-view producer leaked return eligibility')
 assert(not C:RegisterPreview(report,{guide_id='TEST',split_after='TEST/pause',required_gates={'entry'}}),'requirements profile became runtime permission')
 for _,mutate in ipairs({
  function(r)for _,m in ipairs(r.views[1].goals)do if m.action=='use_item'then m.source_goal.complete_when=nil end end end,
@@ -243,6 +251,7 @@ for _,view in ipairs(visible.views) do
  for _,m in ipairs(view.goals) do if m.action=='travel' then m.source_goal.to.show_waypoint=true end end
 end
 local navPolicy=copy(policy,{},{n=0,bytes=0},0);navPolicy.source_sha256=visible.provenance.source_sha256
+identify(visible,navPolicy)
 assert(C:RegisterPreview(visible,navPolicy))
 local before=pointed
 ZGV:SetGuide('WoW Solo Adventure Preview\\NAV\\View 1',2)

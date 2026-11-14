@@ -1,5 +1,10 @@
 # Provisional viewer adapter for the compiler preview
 
+**Historical prototype handoff:** the field/hash reconciliation below is superseded
+by [Preview Policy Contract 1 alignment](PREVIEW_POLICY_1_ALIGNMENT_2026-11-14.md).
+The preview remains provisional and non-installable; production evidence is still
+missing. This note records the earlier implementation and its original checks.
+
 Reviewed campaign PR [#5](https://github.com/sriak1515/wow-solo-adventure/pull/5)
 at `dfc438c60c95c49eebebccd0729ed12b0dcd77d7`, including the Step 3 and Step 4
 handoffs, and PR [#6](https://github.com/sriak1515/wow-solo-adventure/pull/6)

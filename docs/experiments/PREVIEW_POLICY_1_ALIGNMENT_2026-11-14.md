@@ -1,0 +1,51 @@
+# Preview Policy Contract 1 alignment
+
+The authoritative internal preview contract is
+[PREVIEW_POLICY_V1.md at compiler ef1ac7f](https://github.com/sriak1515/wow-solo-adventure/blob/ef1ac7f6af382a34cff8ffa74ff7ff044fae7a60/tools/content/PREVIEW_POLICY_V1.md).
+It fixes the fields and canonical identity bytes while retaining
+`provisional=true` and `BLOCKED_NOT_INSTALLABLE`. This is not a new public package
+interface or a playable-content approval. It supersedes the undecided field/hash
+boundary in the earlier viewer handoff; that note remains implementation history.
+
+The viewer now requires explicit policy version, provisional status, locked state,
+exact source hash, condition map and passage map. It validates the external
+`report.policy_identity` tuple against its own computed hash. Embedded identity
+fields, the obsolete version alias, unsupported versions, malformed values,
+non-UTF-8 strings, mixed/sparse tables and conflicting identities reject before
+native registration. Identity values follow the contract's ASCII keys, integer
+range and 32-level nesting limit. No policy identity is silently overwritten.
+
+The hash envelope is exactly `canonical({source=policy.source_sha256,
+policy=policy,version=1})` under Lua 5.1. The three pinned golden vectors verify
+both complete canonical byte strings and SHA-256, including empty maps, nested
+conditions/arrays and UTF-8/control bytes. The frozen compiler helper hash is
+`d8c3f1527cf7743c26d88973f5063d07d05b908674038a0025bd5ad341a5a742`.
+
+All three source-condition representations must agree: each native step mapping's
+typed `only_if`, `report.source_integration.step_conditions`, and
+`policy.step_conditions`. Missing, extra and changed conditions reject, including
+when the changed policy has a correctly recomputed hash. Generated Lua never
+substitutes for typed source facts. Locked definitions must equal the compiler's
+source-derived draft exactly; candidate producer associations grant no authority.
+Omitting policy derives only that same locked draft and still checks its identity.
+
+Passage admission, pending delivery and presented history remain bound to exact
+source/policy identity and passage revision. Preview checkpoint proof revisions now
+also include runtime scope, and new checkpoint observations require evidence-backed
+access to the checkpoint's containing view. Old records cannot cross source or
+policy/condition changes; another character inherits no authorization. The public
+interface-v1 checkpoint hash remains byte-identical because it has no preview scope.
+
+The existing five-character party/raid observer, owner-gate provenance, session,
+roster and suspension identity checks remain in force. Missing, stale, unknown or
+foreign owner evidence denies entry, continuation, advancement and new checkpoint
+recording. No production evidence provider is installed. No group reformation,
+readiness bypass, source rewrite, installed-addon update or character-state change
+occurs. Existing playable guide files and the previous pilot ZIP are untouched.
+
+Verification is offline/simulated. The Lua regression suite includes the golden
+vectors and negative source/identity tests, plus existing action, navigation,
+entry/pause/return and narration regressions. Compiler interoperability is checked
+against the pinned ef1ac7f revision. Actual owner records, observation freshness,
+Playerbot/client behavior and secure gameplay still require their separate real
+verification before any activating package. No new ZIP is produced here.
