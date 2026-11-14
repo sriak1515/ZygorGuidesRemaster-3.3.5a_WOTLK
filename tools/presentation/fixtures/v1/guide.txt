@@ -1,0 +1,18 @@
+author WoW Solo Adventure
+type leveling
+startlevel 1
+step
+label "KAL-01/accept-balance-one"
+goto Teldrassil,58.6,44.7 |n
+talk Quest contact##2079 |n
+accept Quest##456
+step
+label "KAL-01/complete-balance-one"
+goto Teldrassil,62.0,42.6 |n
+kill 7 Creature##2031 |q 456/1 |tip Look for young nightsabers along the Shadowglen paths.
+kill 4 Creature##1984 |q 456/2 |tip Look for young thistle boars in the same general area.
+step
+label "KAL-01/reward-balance-one"
+goto Teldrassil,58.6,44.7 |n
+talk Quest contact##2079 |n
+turnin Quest##456

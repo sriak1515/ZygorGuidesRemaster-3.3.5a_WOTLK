@@ -4255,7 +4255,10 @@ function me:EnsureGuideParsed(guideOrTitle,allowRetry)
 		guide = self.registeredguides[guideOrTitle]
 	end
 	if not guide then return nil,false end
-	if guide.parsed then return guide,true end
+	if guide.parsed then
+		if self.CampaignData then self.CampaignData:OnParsed(guide) end
+		return guide,true
+	end
 	if guide.parse_failed and not allowRetry then return guide,false end
 	if not guide.rawdata then
 		guide.parsed = true
@@ -4273,6 +4276,7 @@ function me:EnsureGuideParsed(guideOrTitle,allowRetry)
 		guide.parse_failed=nil
 		self:MarkGuideRecentlyParsed(guide)
 		self:TrimParsedGuideCache()
+		if self.CampaignData then self.CampaignData:OnParsed(guide) end
 		return guide,true
 	end
 
@@ -4679,6 +4683,9 @@ function me:TryToCompleteStep(force)
 				end
 			end
 
+			if self.CampaignData then
+				self.CampaignData:BeforeAdvance(self.CurrentGuide,self.CurrentStep,stepcomplete,self.LastSkip)
+			end
 			self:SkipStep(self.LastSkip,true)
 			self.fastforward=true
 
@@ -9096,6 +9103,7 @@ function me:RegisterGuide(title,data,extra)
 
 	tinsert(group.guides,{full=title,short=tit or title,num=#self.registeredguides+1})
 	tinsert(self.registeredguides,guide)
+	if self.CampaignData then self.CampaignData:OnRegistered(guide) end
 end
 
 me.registered_mapspotset_groups = { groups={},guides={}}

@@ -62,6 +62,8 @@
 	<Include file="ZygorMapIcon.xml" />
 	<Include file="ZygorGuidesViewerFrame.xml" />
 	<Script file="Parchment.lua"/>
+	<Script file="CampaignHash.lua"/>
+	<Script file="CampaignData.lua"/>
 	<Script file="Presentation.lua"/>
 	<Script file="BanethilStory.lua"/>
 	<Script file="PresentationFixture.lua"/>
