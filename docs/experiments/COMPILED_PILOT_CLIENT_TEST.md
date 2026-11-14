@@ -14,7 +14,7 @@ This package does not select a guide, reset progress, alter existing campaign
 content, or change the server. The pilot remains a separate entry in Guides.
 
 For the full quest-event test use an eligible Night Elf test character who has not
-yet completed quest 456. The current main character has already passed this example;
+yet accepted or completed quest 456. The current main character has already passed this example;
 selecting it there should skip completed work without backfilling story. Do not
 abandon quests, reset SavedVariables or rewind the active campaign to make this test
 run. It is fine to defer the fresh-character test.

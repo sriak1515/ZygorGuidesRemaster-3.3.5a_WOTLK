@@ -5,7 +5,8 @@ local F={}
 ZGV.CampaignPlayerFacts=F
 local classes={WARRIOR='Warrior',PALADIN='Paladin',HUNTER='Hunter',ROGUE='Rogue',PRIEST='Priest',
  DEATHKNIGHT='DeathKnight',SHAMAN='Shaman',MAGE='Mage',WARLOCK='Warlock',DRUID='Druid'}
-local races={Human=true,Orc=true,Dwarf=true,NightElf=true,Undead=true,Tauren=true,Gnome=true,Troll=true,BloodElf=true,Draenei=true}
+local races={Human='Human',Orc='Orc',Dwarf='Dwarf',NightElf='NightElf',Undead='Undead',Scourge='Undead',
+ Tauren='Tauren',Gnome='Gnome',Troll='Troll',BloodElf='BloodElf',Draenei='Draenei'}
 local function call(fn,...)
     if type(fn)~='function' then return end
     local ok,a,b=pcall(fn,...)
@@ -14,7 +15,7 @@ end
 function F:Read(requested)
     local facts={items={}}
     if requested.class then local _,tag=call(UnitClass,'player');facts.class=classes[tag] end
-    if requested.race then local _,tag=call(UnitRace,'player');if races[tag] then facts.race=tag end end
+    if requested.race then local _,tag=call(UnitRace,'player');facts.race=races[tag] end
     if requested.level then
         local n=call(UnitLevel,'player')
         if type(n)=='number' and n>=1 and n<=80 and n==math.floor(n) then facts.level=n end

@@ -17,6 +17,8 @@ local evaluate=ZGV.CampaignAdmission.Evaluate
 assert(evaluate({all={{class_is='Druid'},{race_is='NightElf'},{level_at_least={actor='leader',level=18}},{has_item={item_id=42,count=2}}}},{player=facts})==true)
 assert(evaluate({has_item={item_id=43,count=1}},{player=facts})==false)
 counts[42]=3;assert(ZGV.CampaignPlayerFacts:Read({items={[42]=true}}).items[42]==3)
+UnitRace=function()return 'Localized','Scourge'end
+assert(ZGV.CampaignPlayerFacts:Read({race=true}).race=='Undead')
 UnitClass=function()error('unavailable')end;UnitRace=function()return nil,nil end
 UnitLevel=function()return 0 end;GetItemCount=function()return nil end
 facts=ZGV.CampaignPlayerFacts:Read({class=true,race=true,level=true,items={[42]=true}})
