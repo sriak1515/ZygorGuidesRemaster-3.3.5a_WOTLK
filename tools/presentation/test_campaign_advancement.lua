@@ -351,3 +351,25 @@ refresh(quest(1,0));assert(#admitted()==1)
 session();refresh(quest(7,4,true));query({});ZGV:FocusStep(3)
 query({[456]=true});assert(#admitted()==0)
 refresh({});assert(#admitted()==1 and admitted()[1].type=='moment')
+-- Registry presentation recording remains separately guarded by binding/admission.
+local pendingEntries=C:CollectAdmitted(registration)
+assert(#pendingEntries==1 and #C:CollectPresented(registration)==0)
+assert(not C:MarkPresented(registration,'future',string.rep('f',64)))
+assert(not C:MarkPresented(registration,pendingEntries[1].id,'wrong-revision'))
+assert(C:MarkPresented(registration,pendingEntries[1].id,pendingEntries[1].revision))
+assert(#C:CollectPresented(registration)==1)
+assert(C:MarkPresented(registration,pendingEntries[1].id,pendingEntries[1].revision) and #C:CollectPresented(registration)==1)
+-- Actual cache -> admission -> delivery notifications preserve live provenance.
+assert(loadfile(root..'/CampaignDelivery.lua'))()
+ZGV.Presentation={mode='live',storyOpen=false,Publish=function()end}
+local delivery=ZGV.CampaignDelivery
+assert(delivery:SetMode('moment','open'))
+session();delivery:BeginSession();refresh({});query({});refresh(quest(0,0))
+assert(not delivery:Context(registration).autoOpen)
+refresh(quest(7,4,true));assert(ZGV.CurrentStepNum==3)
+ZGV.completedQuests[456]=true;refresh({});query({[456]=true})
+local delivered=delivery:Context(registration)
+assert(delivered.type=='moment' and delivered.autoOpen and #C:CollectPresented(registration)==0)
+local persistedAdmission=ZGV.db.char
+session(nil,persistedAdmission);delivery:BeginSession();refresh({});query({[456]=true})
+assert(not delivery:Context(registration).autoOpen,'restored eligibility retriggered automatic opening')

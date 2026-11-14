@@ -1,5 +1,6 @@
 -- Internal pilot admission, independent of native progression and presentation.
--- nil is UNKNOWN. This module never marks a passage presented or advances a step.
+-- nil is UNKNOWN. Only an explicit reader report records presentation; native
+-- progression is never changed here.
 local ZGV=ZygorGuidesViewer
 if not ZGV then return end
 local A={}
@@ -36,6 +37,7 @@ end
 A.Evaluate=evaluate
 function A.New(metadata,char)
     local controller={}
+    local liveEncounters={}
     local function state(create)
         local root=char.campaignAdmission
         if root==nil and create then
@@ -56,6 +58,7 @@ function A.New(metadata,char)
     end
     function controller:Observe(events,facts)
         local saved=state(false)
+        local arrivals={}
         -- A fresh matching action is the anchor; selecting/focusing a step is not.
         for _,event in ipairs(events) do
             for _,passage in ipairs(metadata.narration) do
@@ -64,6 +67,7 @@ function A.New(metadata,char)
                     if not matching(existing,passage) then
                         saved=state(true)
                         if saved then
+                            liveEncounters[passage.id]=passage.revision
                             saved.passages[passage.id]={revision=passage.revision,proof={
                                 kind=event.kind,quest_id=event.quest_id,
                                 reward_baseline=event.reward_baseline==true,
@@ -73,7 +77,7 @@ function A.New(metadata,char)
                 end
             end
         end
-        if not saved then return end
+        if not saved then return arrivals end
         -- Authored order only breaks ties for passages admitted in this observation.
         for _,passage in ipairs(metadata.narration) do
             local record=saved.passages[passage.id]
@@ -90,9 +94,11 @@ function A.New(metadata,char)
                 if record and proof.qualified==true and record.eligible~=true and evaluate(passage.requires,facts)==true then
                     saved.next_order=saved.next_order+1
                     record.eligible=true;record.order=saved.next_order
+                    arrivals[#arrivals+1]={id=passage.id,revision=passage.revision,live=liveEncounters[passage.id]==passage.revision}
                 end
             end
         end
+        return arrivals
     end
     -- Eligible pending delivery is distinct from first-visible presentation/history.
     -- Only admitted prose can cross this internal boundary; editorial data cannot.
@@ -104,7 +110,37 @@ function A.New(metadata,char)
             local record=saved.passages[passage.id]
             if matching(record,passage) and record.proof.qualified==true and record.eligible==true and type(record.order)=='number' then
                 result[#result+1]={id=passage.id,revision=passage.revision,type=passage.type,
-                    title=passage.title,body=passage.text,order=record.order}
+                    title=passage.title,body=passage.text,order=record.order,
+                    presented=type(record.presented_order)=='number'}
+            end
+        end
+        table.sort(result,function(a,b)return a.order<b.order end)
+        return result
+    end
+    function controller:MarkPresented(id,revision)
+        local saved=state(false)
+        if not saved then return false end
+        for _,passage in ipairs(metadata.narration) do
+            local record=saved.passages[passage.id]
+            if passage.id==id and passage.revision==revision and matching(record,passage)
+                and record.proof.qualified==true and record.eligible==true then
+                if type(record.presented_order)=='number' then return true end
+                local n=saved.next_presented or 0
+                if type(n)~='number' or n<0 or n>=2147483648 or n~=math.floor(n) then return false end
+                saved.next_presented=n+1;record.presented_order=n+1
+                return true
+            end
+        end
+        return false
+    end
+    function controller:History()
+        local result={}
+        local saved=state(false)
+        if not saved then return result end
+        for _,entry in ipairs(self:Collect()) do
+            if entry.presented then
+                entry.order=saved.passages[entry.id].presented_order
+                result[#result+1]=entry
             end
         end
         table.sort(result,function(a,b)return a.order<b.order end)

@@ -142,17 +142,41 @@ function P:Relayout()
 end
 
 -- Story presentation state never changes objective evidence or native pause.
-function P:ToggleStory()
+function P:ToggleStory(mouseButton)
+    if self.mode=="live" and self.storyEntry and self.storyEntry.campaign and ZGV.CampaignDelivery and mouseButton=="RightButton" then
+        if ZGV.CampaignDelivery:RecallPrevious(ZGV.CurrentGuideName) then
+            self:Publish();self.storyOpen=true;self:LayoutPanels();self:CommitStoryPresentation()
+        end
+        return
+    end
     if not self.storyEntry then return end
+    if self.storyEntry.campaign then
+        if InCombatLockdown() then return end
+        if self.storyOpen then self:FoldStory(false);return end
+    end
     self.storyOpen=not self.storyOpen
     self.storyCue=false
     self:LayoutPanels()
+    self:CommitStoryPresentation()
 end
 function P:FoldStory(interrupted)
+    local campaign=self.storyEntry and self.storyEntry.campaign
+    if campaign and ZGV.CampaignDelivery then ZGV.CampaignDelivery:Close(self.storyEntry,interrupted) end
     if interrupted and self.storyOpen then self.storyCue=true
     elseif not interrupted then self.storyCue=false end
     self.storyOpen=false
+    if campaign and not interrupted then self:Publish() end
     self:LayoutPanels()
+end
+function P:CommitStoryPresentation()
+    local entry=self.storyEntry
+    if self.mode~="live" or self.fixture or not entry or not entry.campaign or not self.storyOpen then return end
+    if self.storyCommittedIdentity==self.storyIdentity and self.storyCommittedChar==ZGV.db.char then return end
+    if InCombatLockdown() or not self.storyPanel or not self.storyPanel:IsVisible() or not self.storyFits then return end
+    if not self.panel:IsVisible() or self.panel:GetAlpha()<0.1 then return end
+    if ZGV.CampaignDelivery and ZGV.CampaignDelivery:MarkVisible(entry) then
+        self.storyCommittedIdentity,self.storyCommittedChar=self.storyIdentity,ZGV.db.char
+    end
 end
 function P:LayoutPanels()
     if not self.panel or not self.lastSnapshot then return end
@@ -244,13 +268,14 @@ function P:Render(snapshot)
         -- Explicit current-step context remains a fallback for other passages.
         entry={id=stepKey,title=snapshot.step.title or "Current context",body=table.concat(context,"\n\n")}
     end
-    local identity=entry and (snapshot.source..":"..(entry.persistent and "story" or tostring(snapshot.guide.id))..":"..entry.id)
+    local identity=entry and (snapshot.source..":"..(entry.campaign and entry.registration or (entry.persistent and "story" or tostring(snapshot.guide.id)))..":"..entry.id..":"..tostring(entry.revision or ""))
     local changed=identity~=self.storyIdentity
     self.storyEntry,self.storyIdentity=entry,identity
     if changed then
         self.storyOpen=entry and (not entry.persistent or entry.autoOpen) and not (InCombatLockdown() or self.fixtureCombat) or false
         self.storyCue=entry and not self.storyOpen or false
     end
+    if entry and entry.campaign then self.storyCue=entry.cue and true or false end
     if entry then
         self.storyTitle:SetText(clean(entry.title))
         local reading=ZGV.db.profile.parchment and ZGV.db.profile.parchment.contextsize
@@ -309,6 +334,7 @@ function P:Render(snapshot)
 
     if entry then finishPane(self.storyPane,self.storyText:GetStringHeight()+12,changed) end
     self:LayoutPanels()
+    self:CommitStoryPresentation()
 end
 
 function P:SyncHostVisibility()
@@ -394,13 +420,14 @@ function P:CreatePanel(parent)
         self.objectives.offset=offset;self:SecureButtons()
     end)
     self.empty=label(panel,12)
-    self.storyToggle=button(panel,"",24,function() self:ToggleStory() end)
+    self.storyToggle=button(panel,"",24,function(_,mouseButton) self:ToggleStory(mouseButton) end)
     self.storyToggle:SetHeight(30);ZGV.Parchment:StyleButton(self.storyToggle)
     self.storyToggle.label:ClearAllPoints();self.storyToggle.label:SetPoint("BOTTOMRIGHT",-1,1)
     self.storyToggle.icon=self.storyToggle:CreateTexture(nil,"ARTWORK")
     self.storyToggle.icon:SetTexture("Interface\\Icons\\INV_Misc_Book_09")
     self.storyToggle.icon:SetSize(16,16);self.storyToggle.icon:SetPoint("CENTER",0,1)
     tooltip(self.storyToggle,function()
+        if self.storyEntry and self.storyEntry.campaign then return "Story. Left-click to read; right-click to revisit a presented passage." end
         return not self.storyFits and "Story: move the guide nearer an edge to make room." or (self.storyCue and "New story. Click to read." or "Story. Click to reread.")
     end)
     self.grip=button(panel,"/",18,function() end);self.grip:SetPoint("BOTTOMRIGHT",-3,2)
@@ -447,6 +474,7 @@ function P:Activate(mode)
         ZGV:Print("Show the existing guide before /zgpoc live.");return
     end
     self.mode=mode
+    if ZGV.CampaignDelivery then ZGV.CampaignDelivery:BeginSession() end
     if mode=="fixture" then
         self.fixture={step=1,done={}}
         -- Independent surface: original engine, visibility and guide untouched.
@@ -508,8 +536,10 @@ function P:Stop()
         self:SaveGeometry()
         ZGV.Parchment:ClearSecureButtons(self)
     end
+    if ZGV.CampaignDelivery then ZGV.CampaignDelivery:BeginSession() end
     self.mode=nil;self.pendingStop=nil;self.fixture=nil;self.fixtureCombat=nil;self.fixtureSettings=nil
     self.storyEntry=nil;self.storyIdentity=nil;self.storyOpen=false;self.storyCue=false
+    self.storyCommittedIdentity=nil;self.storyCommittedChar=nil
     self.lastSnapshot=nil;self.renderStepKey=nil
     if self.unsubscribe then self.unsubscribe();self.unsubscribe=nil end
     if self.panel then
@@ -554,6 +584,7 @@ end
 
 function P:Tick(elapsed)
     self:SyncHostVisibility()
+    self:CommitStoryPresentation()
     self.layoutElapsed=(self.layoutElapsed or 0)+elapsed
     if self.layoutElapsed>=0.05 then
         self.layoutElapsed=0

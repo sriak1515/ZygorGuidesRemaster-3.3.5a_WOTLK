@@ -11,13 +11,13 @@ for path in sorted(addon.glob('*.lua')):
 print('PASS static: all top-level addon Lua parses under Lua 5.1', flush=True)
 xml = ET.parse(addon / 'files.xml')
 scripts = [n.attrib['file'] for n in xml.iter() if n.tag.endswith('Script')]
-assert scripts.index('Goal.lua') < scripts.index('CampaignHash.lua') < scripts.index('CampaignAdmission.lua') < scripts.index('CampaignData.lua') < scripts.index('Presentation.lua')
+assert scripts.index('Goal.lua') < scripts.index('CampaignHash.lua') < scripts.index('CampaignAdmission.lua') < scripts.index('CampaignData.lua') < scripts.index('CampaignDelivery.lua') < scripts.index('Presentation.lua')
 assert scripts.index('Parchment.lua') < scripts.index('Presentation.lua')
 assert scripts.index('QuestTracking.lua') < scripts.index('BanethilStory.lua')
 assert scripts.index('Presentation.lua') < scripts.index('BanethilStory.lua') < scripts.index('PresentationUI.lua')
 assert scripts.index('Presentation.lua') < scripts.index('PresentationFixture.lua') < scripts.index('PresentationUI.lua')
 assert 'files.xml' in (addon / 'ZygorGuidesViewerRM.toc').read_text()
-for name in ('CampaignHash.lua', 'CampaignAdmission.lua', 'CampaignData.lua', 'Presentation.lua', 'BanethilStory.lua', 'PresentationFixture.lua', 'PresentationUI.lua'):
+for name in ('CampaignHash.lua', 'CampaignAdmission.lua', 'CampaignData.lua', 'CampaignDelivery.lua', 'Presentation.lua', 'BanethilStory.lua', 'PresentationFixture.lua', 'PresentationUI.lua'):
     assert scripts.count(name) == 1
 print('PASS static: TOC/XML presentation loading order', flush=True)
 failures = []

@@ -65,6 +65,7 @@
 	<Script file="CampaignHash.lua"/>
 	<Script file="CampaignAdmission.lua"/>
 	<Script file="CampaignData.lua"/>
+	<Script file="CampaignDelivery.lua"/>
 	<Script file="Presentation.lua"/>
 	<Script file="BanethilStory.lua"/>
 	<Script file="PresentationFixture.lua"/>

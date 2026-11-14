@@ -20,6 +20,10 @@ function ZGV:GetPresentationSnapshot()
             label=step and step.label,title=step and step.title},goals={},
         navigation={},paused=self.pause and true or false,
         context=self.BanethilStory and self.BanethilStory:Context()}
+    if self.CampaignDelivery then
+        local entry=self.CampaignDelivery:Context(self.CurrentGuideName)
+        if entry then snapshot.context=entry end
+    end
     for i,goal in ipairs(step and step.goals or {}) do
         local status,progress=goal:GetStatus()
         if status~="hidden" then

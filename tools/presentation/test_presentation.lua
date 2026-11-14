@@ -551,3 +551,91 @@ assert(loadfile(root.."/PresentationUI.lua"))()
 assert(ZGV.Presentation:Settings().width==saved.width and ZGV.Presentation:Settings().height==saved.height)
 assert(ZGV.db.profile.fontsize==19 and ZGV.db.profile.fontsecsize==15,"reload lost font settings")
 print("PASS presentation: detached API, native progression, vertical rows/overflow, story gates/fold/recall/scroll/combat/placement, fixture isolation, fallback/fault/reload simulation")
+
+-- Delivery + real reader: the registry is a bound-admission double here; actual
+-- registry/evidence/advancement are exercised in test_campaign_advancement.
+P=ZGV.Presentation
+assert(loadfile(root.."/PresentationFixture.lua"))()
+-- Earlier module-reload simulation retained old frame doubles; a real reload
+-- destroys them. Use fresh names for this independently activated instance.
+namedFrames={}
+ZGV.db.char={step=persisted}
+assert(loadfile(root..'/CampaignAdmission.lua'))()
+assert(loadfile(root..'/CampaignDelivery.lua'))()
+local delivery=ZGV.CampaignDelivery
+local authored={guide={id='reader-pilot'},narration={
+ {id='context',revision='r1',type='context',at_step='a',title='A safe context',text=string.rep('A presented paragraph.\n',60)},
+ {id='moment',revision='r2',type='moment',at_step='b',title='A safe moment',text='A second admitted passage.'},
+ {id='chapter',revision='r3',type='chapter',at_step='c',title='A safe chapter',text='A third admitted passage.'},
+ {id='hidden',revision='r4',type='context',at_step='d',title='Shown later',text='This must be visible before recording.'},
+ {id='future',revision='r5',type='moment',at_step='e',title='SECRET FUTURE TITLE',text='SECRET FUTURE BODY'},
+ {id='live',revision='r6',type='moment',at_step='f',title='A live moment',text='A safe configured live opening.'},
+}}
+local admission=ZGV.CampaignAdmission.New(authored,ZGV.db.char)
+ZGV.CampaignData={CollectAdmitted=function()return admission:Collect()end,
+ CollectPresented=function()return admission:History()end,
+ MarkPresented=function(_,_,id,revision)
+  assert(P.storyPanel:IsVisible() and P.storyFits and P.storyOpen,'recorded an invisible passage')
+  assert(P.storyText.text==P.storyEntry.body,'recorded before text was rendered')
+  return admission:MarkPresented(id,revision)
+ end}
+local function arrival(step)
+ local arrivals=admission:Observe({{source_step_id=step,kind='accept',quest_id=1}},{})
+ for _,entry in ipairs(arrivals)do delivery:OnAdmission(ZGV.CurrentGuideName,entry)end
+ P:Publish()
+end
+P:Start('live')
+local navigationBefore=waypoints
+arrival('a');assert(P.storyEntry.campaign and not P.storyOpen and #admission:History()==0)
+local detached=ZGV:GetPresentationSnapshot()
+assert(detached.context.body==authored.narration[1].text and #admission:History()==0)
+assert(not tostring(P.storyTitle.text):find('SECRET',1,true))
+P:ToggleStory();assert(P.storyOpen and #admission:History()==1)
+P.storyPane:SetVerticalScroll(70)
+delivery:SetMode('moment','open')
+arrival('b');assert(P.storyEntry.id=='context' and #admission:History()==1,'arrival replaced a reader in use')
+combat=true
+for _,f in ipairs(frames)do if f.scripts.OnEvent then f.scripts.OnEvent(f,'PLAYER_REGEN_DISABLED')end end
+assert(not P.storyOpen and P.storyPane.offset==70)
+combat=false
+for _,f in ipairs(frames)do if f.scripts.OnEvent then f.scripts.OnEvent(f,'PLAYER_REGEN_ENABLED')end end
+P:Publish();assert(not P.storyOpen and P.storyEntry.id=='context' and P.storyPane.offset==70)
+P:ToggleStory();assert(P.storyOpen and P.storyPane.offset==70)
+P:FoldStory(false);assert(not P.storyOpen and P.storyEntry.id=='moment' and #admission:History()==1)
+-- Right-click recalls only a presented entry, including an identity already selected.
+P:ToggleStory('RightButton');assert(P.storyOpen and P.storyEntry.id=='context' and #admission:History()==1)
+P:FoldStory(false);P:ToggleStory();assert(P.storyEntry.id=='moment' and #admission:History()==2)
+P:FoldStory(false)
+P:ToggleStory('RightButton');assert(P.storyOpen,'same-identity recall did not open')
+P:FoldStory(false)
+-- If the leaf cannot fit, opening intent must not create history.
+arrival('c')
+local screenWidth=UIParent:GetWidth()
+UIParent:SetWidth(400);ZGV.Frame.left=60;P.panel.left=60;P:Relayout()
+assert(not P.storyFits and #admission:History()==2)
+P:ToggleStory();assert(P.storyOpen and not P.storyPanel:IsShown() and #admission:History()==2)
+UIParent:SetWidth(screenWidth);P.panel.left=nil;P:Relayout();assert(P.storyFits and #admission:History()==3)
+P:FoldStory(false)
+-- Hidden host/zero opacity never count as visible presentation.
+arrival('d');ZGV.Frame:Hide();P:SyncHostVisibility();P:ToggleStory()
+assert(#admission:History()==3)
+ZGV.Frame:Show();ZGV.Frame:SetAlpha(0);P:SyncHostVisibility();P:CommitStoryPresentation()
+assert(#admission:History()==3)
+ZGV.Frame:SetAlpha(1);P:Tick(0);assert(#admission:History()==4)
+P:FoldStory(false);arrival('f');assert(P.storyOpen and P.storyEntry.id=='live' and #admission:History()==5)
+assert(waypoints==navigationBefore,'story delivery or recall retargeted navigation')
+for _,entry in ipairs(admission:History())do assert(entry.id~='future')end
+local deliveredChar=ZGV.db.char
+local originalName,originalIdentity=ZGV.CurrentGuideName,P.storyIdentity
+ZGV.CurrentGuideName='another-compiled-guide';P:Publish()
+assert(P.storyIdentity~=originalIdentity and not P.storyOpen,'reader identity crossed guide boundaries')
+ZGV.CurrentGuideName=originalName;P:Publish()
+P:Stop()
+-- Reload retains history/preferences but the reader starts folded; fixtures cannot write history.
+assert(loadfile(root..'/CampaignDelivery.lua'))();delivery=ZGV.CampaignDelivery
+P:Start('live');assert(not P.storyOpen and ZGV.db.char==deliveredChar)
+assert(delivery:Mode('moment')=='open' and #admission:History()==5)
+P:Start('fixture');assert(P.mode=='fixture');P:ToggleStory();assert(#admission:History()==5)
+P:Stop()
+assert(ZGV.RegisterCampaignGuideMetadata==nil)
+print('PASS actual reader delivery: visible-only history, no snapshot enrollment, pinned passage/scroll, combat tuck, presented-only recall, fit/visibility/opacity guards, quiet reload and navigation isolation')

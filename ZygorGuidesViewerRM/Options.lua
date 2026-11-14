@@ -24,6 +24,15 @@ local function GetClassTagFromID(classID)
 	return nil
 end
 
+-- Shared by the classic and embedded display settings. Conservative cue-only
+-- fallback; these preferences apply to compiled v1 passages, not legacy recovery.
+local function CampaignStoryOption(kind,name,order)
+    return {name=name,desc="Compiled story passages: a quiet cue, or open new live passages when safe.",
+        type="select",values={cue="Quiet cue",open="Open when safe"},order=order,width="normal",
+        get=function() return me.CampaignDelivery and me.CampaignDelivery:Mode(kind) or "cue" end,
+        set=function(_,value) if me.CampaignDelivery then me.CampaignDelivery:SetMode(kind,value) end end}
+end
+
 function me:Options_RegisterDefaults()
 	self.db:RegisterDefaults({
 		char = {
@@ -769,6 +778,9 @@ function me:Options_DefineOptions()
 					    set = function(_,v) if v then self.Presentation:Start("live") else self.Presentation:Stop() end end,
 					    order = 3.26, width = "full",
 					},
+					campaigncontext = CampaignStoryOption("context","Context passages",3.27),
+					campaignmoment = CampaignStoryOption("moment","Story moments",3.28),
+					campaignchapter = CampaignStoryOption("chapter","Chapter passages",3.29),
 					sep_window_row3 = {
 						type = "description",
 						name = "",
@@ -1898,6 +1910,9 @@ function me:Options_DefineOptions()
 			    set = function(_,v) if v then self.Presentation:Start("live") else self.Presentation:Stop() end end,
 			    order = 3.46, width = "full",
 			},
+			campaigncontext = CampaignStoryOption("context","Context passages",3.47),
+			campaignmoment = CampaignStoryOption("moment","Story moments",3.48),
+			campaignchapter = CampaignStoryOption("chapter","Chapter passages",3.49),
 			opacitymain = {
 				name = L["opt_opacitymain"],
 				desc = L["opt_opacitymain_desc"],

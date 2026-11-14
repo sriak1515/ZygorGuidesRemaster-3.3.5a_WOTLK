@@ -38,3 +38,22 @@ for block in source:gmatch("\n[\t ]*adventureinterface = (%b{})") do
 end
 assert(count==2,"both existing settings presentations must expose adventure activation")
 print("PASS: adventure interface is available through both normal settings presentations")
+
+-- Both settings presentations share the actual per-type delivery callbacks.
+local helper=assert(source:match('(local function CampaignStoryOption.-)\nfunction me:Options_RegisterDefaults'))
+local makeOption=assert(loadstring('local me=...;'..helper..'\nreturn CampaignStoryOption'))(me)
+me.CampaignDelivery={modes={}}
+function me.CampaignDelivery:Mode(kind)return self.modes[kind] or 'cue'end
+function me.CampaignDelivery:SetMode(kind,value)self.modes[kind]=value end
+for _,kind in ipairs({'context','moment','chapter'})do
+ local count=0
+ for name,order in source:gmatch('campaign'..kind..' = CampaignStoryOption%("'..kind..'","([^"]+)",([%d.]+)%)')do
+  count=count+1
+  local option=makeOption(kind,name,tonumber(order))
+  assert(option.type=='select' and option.values.cue and option.values.open)
+  option.set({},'open');assert(option.get()=='open')
+  option.set({},'cue');assert(option.get()=='cue')
+ end
+ assert(count==2,'both settings presentations must expose '..kind)
+end
+print('PASS per-type story preferences execute shared callbacks in both normal settings presentations')

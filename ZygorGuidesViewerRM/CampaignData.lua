@@ -198,7 +198,7 @@ end
 -- Detached, spoiler-safe inspection; never return definitions, IDs or passage counts.
 function ZGV:GetCampaignGuideStatus(registration)
     local r=registrations[registration]
-    return r and {state=r.state,code=r.code,delivery='not-implemented'} or nil
+    return r and {state=r.state,code=r.code,delivery='internal-only'} or nil
 end
 local observers={}
 function C:SubscribeAdvancement(callback)
@@ -256,7 +256,10 @@ local function deliverObservations(events)
     for _,r in pairs(registrations) do
         if r.state=='bound' then
             r.admission=r.admission or ZGV.CampaignAdmission.New(r.metadata,observedChar)
-            r.admission:Observe(events[r] or {},{log=lastLog,known=lastKnown,rewards=lastRewards})
+            local arrivals=r.admission:Observe(events[r] or {},{log=lastLog,known=lastKnown,rewards=lastRewards})
+            if ZGV.CampaignDelivery then
+                for _,arrival in ipairs(arrivals or {}) do ZGV.CampaignDelivery:OnAdmission(r.view.registration,arrival) end
+            end
         end
     end
 end
@@ -318,6 +321,20 @@ end
 function C:CollectAdmitted(registration)
     if not character() then return {} end
     local r=registrations[registration]
-    if not r or r.state~='bound' or not r.admission then return {} end
+    if not r or r.state~='bound' then return {} end
+    r.admission=r.admission or ZGV.CampaignAdmission.New(r.metadata,observedChar)
     return r.admission:Collect()
+end
+
+function C:MarkPresented(registration,id,revision)
+    if not character() then return false end
+    local r=registrations[registration]
+    if not r or r.state~='bound' or not r.admission then return false end
+    return r.admission:MarkPresented(id,revision)
+end
+function C:CollectPresented(registration)
+    self:CollectAdmitted(registration) -- initialize the revision-bound controller on recall/reload
+    local r=registrations[registration]
+    if not r or r.state~='bound' or not r.admission then return {} end
+    return r.admission:History()
 end
