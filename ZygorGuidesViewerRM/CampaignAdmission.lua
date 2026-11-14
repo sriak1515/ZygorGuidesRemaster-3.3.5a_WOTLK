@@ -60,8 +60,9 @@ function A.New(metadata,char)
     end
     local function matching(record,passage)
         if type(record)~='table' or record.revision~=passage.revision or type(record.proof)~='table' then return false end
+        if metadata.runtime_scope_hash and record.scope~=metadata.runtime_scope_hash then return false end
         local p=record.proof
-        return (p.kind=='accept' or p.kind=='kill' or p.kind=='turnin') and type(p.quest_id)=='number'
+        return (p.kind=='accept' or p.kind=='kill' or p.kind=='turnin' or p.kind=='activation' or p.kind=='recovery' or p.kind=='proof') and type(p.quest_id)=='number'
             and type(p.qualified)=='boolean' and type(p.reward_baseline)=='boolean'
     end
     function controller:Observe(events,facts)
@@ -71,13 +72,14 @@ function A.New(metadata,char)
         -- A fresh matching action is the anchor; selecting/focusing a step is not.
         for _,event in ipairs(events) do
             for _,passage in ipairs(metadata.narration) do
-                if passage.at_step==event.source_step_id then
+                if (not event.passage_id or event.passage_id==passage.id) and (passage.at_step==event.source_step_id
+                    or metadata.encounter_sources and metadata.encounter_sources[passage.id] and metadata.encounter_sources[passage.id][event.source_step_id]) then
                     local existing=saved and saved.passages[passage.id]
                     if not matching(existing,passage) then
                         saved=state(true)
                         if saved then
                             liveEncounters[passage.id]=passage.revision
-                            saved.passages[passage.id]={revision=passage.revision,proof={
+                            saved.passages[passage.id]={revision=passage.revision,scope=metadata.runtime_scope_hash,proof={
                                 kind=event.kind,quest_id=event.quest_id,
                                 reward_baseline=event.reward_baseline==true,
                                 qualified=event.kind~='turnin'}}
@@ -125,6 +127,21 @@ function A.New(metadata,char)
         end
         table.sort(result,function(a,b)return a.order<b.order end)
         return result
+    end
+    function controller:Recover(id,facts)
+        if not metadata.recovery or metadata.recovery[id]==nil then return false end
+        local saved=state(false)
+        for _,p in ipairs(metadata.narration) do
+            if p.id==id and p.requires and evaluate(p.requires,facts)==true then
+                if saved and matching(saved.passages[id],p) and saved.passages[id].eligible then return true end
+                saved=state(true);if not saved then return false end
+                saved.next_order=saved.next_order+1
+                saved.passages[id]={revision=p.revision,scope=metadata.runtime_scope_hash,eligible=true,order=saved.next_order,
+                    proof={kind='recovery',quest_id=0,reward_baseline=false,qualified=true}}
+                return true
+            end
+        end
+        return false
     end
     function controller:MarkPresented(id,revision)
         local saved=state(false)

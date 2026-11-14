@@ -1085,6 +1085,7 @@ for k,v in pairs(me.WaypointFunctions) do setmetatable (v,nilfuncs) end
 
 
 function me:SetWaypoint(...)
+    if self.CampaignPreview and not self.CampaignPreview:CanNavigate() then self.CampaignPreview:ClearNavigation();return end
 	if UnitIsDeadOrGhost("player") then
 		if self.Pointer and self.Pointer.SetCorpseArrow then
 			self.Pointer:SetCorpseArrow()

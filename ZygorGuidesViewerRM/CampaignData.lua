@@ -158,6 +158,7 @@ function C:OnParsed(guide)
     local r=registrations[guide.title];if not r or r.state=='inactive' then return end
     if r.guide~=guide or not guide.parsed or type(guide.steps)~='table' then fail(r,'registration-mismatch');return end
     if r.steps==guide.steps then return end
+    if r.preview then return r.preview:Bind(r,guide,fail) end
     local labels,source={},{}
     for _,step in ipairs(guide.steps) do
         -- Zygor appends its own unlabelled completion step after the final goal.
@@ -207,7 +208,7 @@ end
 -- Detached, spoiler-safe inspection; never return definitions, IDs or passage counts.
 function ZGV:GetCampaignGuideStatus(registration)
     local r=registrations[registration]
-    return r and {state=r.state,code=r.code,delivery='experimental-v1'} or nil
+    return r and {state=r.state,code=r.code,delivery=r.preview and 'preview-only' or 'experimental-v1'} or nil
 end
 local observers={}
 function C:SubscribeAdvancement(callback)
@@ -233,15 +234,22 @@ end
 
 -- Fresh observation subsets, copied before the native pooled caches are reused.
 -- No timers, quest queries or native completion-cache reads are added here.
-local observedChar,lastLog,lastRewards,lastKnown
+local observedChar,lastLog,lastRewards,lastKnown,lastPlayer
 local rewardTransitions={}
 local function character()
     local char=ZGV.db and ZGV.db.char
     if char~=observedChar then
-        observedChar,lastLog,lastRewards,lastKnown=char,nil,nil,nil;rewardTransitions={}
-        for _,r in pairs(registrations) do r.admission=nil end
+        observedChar,lastLog,lastRewards,lastKnown,lastPlayer=char,nil,nil,nil,nil;rewardTransitions={}
+        for _,r in pairs(registrations) do r.admission=nil;if r.shared then r.shared.admission=nil end end
     end
     return char
+end
+local function controller(r)
+    if r.shared then
+        r.shared.admission=r.shared.admission or ZGV.CampaignAdmission.New(r.metadata,observedChar)
+        r.admission=r.shared.admission
+    else r.admission=r.admission or ZGV.CampaignAdmission.New(r.metadata,observedChar) end
+    return r.admission
 end
 local function watched()
     local ids,player={},{items={}}
@@ -259,27 +267,60 @@ local function watched()
     end
     for _,r in pairs(registrations) do
         if r.state=='bound' then
-            for _,g in ipairs(r.view.goals) do ids[g.quest_id]=true end
+            for _,g in ipairs(r.view.goals) do
+                if g.quest_id then ids[g.quest_id]=true end
+                if g.proof then condition(g.proof) end
+                if g.source_goal then condition(g.source_goal.only_if) end
+            end
+            if r.shared then
+                for _,q in ipairs(r.shared.policy.return_quests or {}) do ids[q]=true end
+                for _,c in pairs(r.shared.policy.step_conditions or {}) do condition(c) end
+            end
             for _,p in ipairs(r.metadata.narration) do condition(p.requires) end
             for _,p in ipairs(r.metadata.checkpoints) do condition(p.proof) end
         end
     end
     return ids,player
 end
-local function deliverObservations(events)
+local function deliverObservations(events,previous)
+    local before=previous or {log=lastLog,known=lastKnown,rewards=lastRewards,player=lastPlayer}
     local _,requested=watched()
     local player=ZGV.CampaignPlayerFacts and ZGV.CampaignPlayerFacts:Read(requested)
+    local after={log=lastLog,known=lastKnown,rewards=lastRewards,player=player}
+    local active=ZGV.CurrentGuide and registrations[ZGV.CurrentGuide.title]
+    if active and active.preview and active.preview:CanRun() then
+        local marked=false
+        for _,g in ipairs(ZGV.CurrentStep.goals) do if ZGV.recentlyStickiedGoals and ZGV.recentlyStickiedGoals[g] then marked=true end end
+        if not marked then
+            for _,m in ipairs(active.view.goals) do
+                if m.source_step_id==active.source[ZGV.CurrentStep] and m.proof
+                    and (not m.source_goal.only_if or ZGV.CampaignAdmission.Evaluate(m.source_goal.only_if,before)==true or ZGV.CampaignAdmission.Evaluate(m.source_goal.only_if,after)==true)
+                    and m.action~='accept_quest' and m.action~='turnin_quest' and m.action~='kill'
+                    and ZGV.CampaignAdmission.Evaluate(m.proof,before)==false and ZGV.CampaignAdmission.Evaluate(m.proof,after)==true then
+                    events[active]=events[active] or {}
+                    events[active][#events[active]+1]={source_step_id=m.source_step_id,kind='proof',quest_id=0}
+                end
+            end
+        end
+    end
+    lastPlayer=player
+    local done={}
     for _,r in pairs(registrations) do
-        if r.state=='bound' then
-            r.admission=r.admission or ZGV.CampaignAdmission.New(r.metadata,observedChar)
-            local arrivals=r.admission:Observe(events[r] or {},{log=lastLog,known=lastKnown,rewards=lastRewards,player=player})
+        if r.state=='bound' and not done[r.shared or r] then
+            done[r.shared or r]=true
+            local combined={}
+            for _,view in ipairs(r.shared and r.shared.views or {r}) do
+                for _,event in ipairs(events[view] or {}) do combined[#combined+1]=event end
+            end
+            local arrivals=controller(r):Observe(combined,{log=lastLog,known=lastKnown,rewards=lastRewards,player=player})
             if ZGV.CampaignDelivery then
-                for _,arrival in ipairs(arrivals or {}) do ZGV.CampaignDelivery:OnAdmission(r.view.registration,arrival) end
+                for _,arrival in ipairs(arrivals or {}) do ZGV.CampaignDelivery:OnAdmission(active and (active==r or active.shared and active.shared==r.shared) and active.view.registration or r.view.registration,arrival) end
             end
         end
     end
 end
 function C:ObserveQuestLog(quests)
+    if ZGV.CampaignPreview then ZGV.CampaignPreview:RefreshAccess() end
     if not next(registrations) or not character() then return end
     local log,known={},watched()
     for id in pairs(known) do
@@ -293,14 +334,17 @@ function C:ObserveQuestLog(quests)
     local events={}
     local r=ZGV.CurrentGuide and registrations[ZGV.CurrentGuide.title]
     local step=ZGV.CurrentStep
-    if lastLog and r and r.state=='bound' and r.guide==ZGV.CurrentGuide and r.steps==r.guide.steps and r.source[step] then
+    if lastLog and r and r.state=='bound' and (not r.preview or r.preview:CanRun()) and r.guide==ZGV.CurrentGuide and r.steps==r.guide.steps and r.source[step] then
         local marked=false
         for _,goal in ipairs(step.goals) do
             if ZGV.recentlyStickiedGoals and ZGV.recentlyStickiedGoals[goal] then marked=true end
         end
         if not marked then
             for _,g in ipairs(r.view.goals) do
-                if g.source_step_id==r.source[step] and lastKnown[g.quest_id] then
+                if g.source_step_id==r.source[step] and lastKnown[g.quest_id]
+                    and (not g.source_goal or not g.source_goal.only_if
+                        or ZGV.CampaignAdmission.Evaluate(g.source_goal.only_if,{log=lastLog,known=lastKnown,rewards=lastRewards,player=lastPlayer})==true
+                        or ZGV.CampaignAdmission.Evaluate(g.source_goal.only_if,{log=log,known=known,rewards=lastRewards,player=lastPlayer})==true) then
                     local old,new=lastLog[g.quest_id],log[g.quest_id]
                     local kind,baseline
                     if g.action=='accept_quest' and not old and new then kind='accept'
@@ -321,25 +365,27 @@ function C:ObserveQuestLog(quests)
     end
     -- Clear reward transitions when a quest is freshly retaken.
     if lastLog then for id in pairs(log) do if not lastLog[id] then rewardTransitions[id]=nil end end end
+    local previous={log=lastLog,known=lastKnown,rewards=lastRewards,player=lastPlayer}
     lastLog,lastKnown=log,known
-    deliverObservations(events)
+    deliverObservations(events,previous)
 end
 function C:ObserveCompletedQuests(quests)
+    if ZGV.CampaignPreview then ZGV.CampaignPreview:RefreshAccess() end
     if not next(registrations) or not character() then return end
     local rewards={}
     for id in pairs(watched()) do
         rewards[id]=quests[id]==true or quests[id]==1
         if lastRewards and lastRewards[id]==false and rewards[id] then rewardTransitions[id]=true end
     end
+    local previous={log=lastLog,known=lastKnown,rewards=lastRewards,player=lastPlayer}
     lastRewards=rewards
-    deliverObservations({}) -- a query alone cannot manufacture an anchor
+    deliverObservations({},previous) -- a query alone cannot manufacture an anchor
 end
 function C:CollectAdmitted(registration)
     if not character() then return {} end
     local r=registrations[registration]
     if not r or r.state~='bound' then return {} end
-    r.admission=r.admission or ZGV.CampaignAdmission.New(r.metadata,observedChar)
-    return r.admission:Collect()
+    return controller(r):Collect()
 end
 
 function C:MarkPresented(registration,id,revision)
@@ -356,6 +402,7 @@ function C:CollectPresented(registration)
 end
 
 function C:ObservePlayerFacts()
+    if ZGV.CampaignPreview then ZGV.CampaignPreview:RefreshAccess() end
     if next(registrations) and character() then deliverObservations({}) end
 end
 function C:IsCheckpointProven(registration,id)
@@ -372,4 +419,50 @@ function ZGV:RegisterCampaignGuideMetadata(metadata)
     end
     self.CampaignDelivery:EnableFallback()
     return true -- staged, not yet bound; native payload/mapping checks still apply
+end
+
+-- Internal preview integration: the public package contract is unchanged.
+function C:PreviewTools()
+    return {copy=clone,array=array,hash=hash,predicate=predicate}
+end
+function C:InstallPreviewRecords(list)
+    if identities[list[1].metadata.guide.id] then return false end
+    for _,r in ipairs(list) do
+        if registrations[r.view.registration] then return false end
+        for _,g in ipairs(ZGV.registeredguides) do if g.title==r.view.registration then return false end end
+    end
+    identities[list[1].metadata.guide.id]=list[1]
+    for _,r in ipairs(list) do registrations[r.view.registration]=r end
+    return true
+end
+function C:RegisterPreview(report,policy)
+    return ZGV.CampaignPreview:Register(report,policy)
+end
+function C:PreviewFacts()
+    if not character() then return {} end
+    local _,requested=watched()
+    return {log=lastLog,known=lastKnown,rewards=lastRewards,player=ZGV.CampaignPlayerFacts and ZGV.CampaignPlayerFacts:Read(requested)}
+end
+function C:PreviewEncounter(r,events)
+    if not character() then return end
+    deliverObservations({[r]=events})
+end
+function C:RecoverPreview(r)
+    if not character() or not r.preview:CanAccess(r.guide) then return end
+    local facts=self:PreviewFacts()
+    for _,passage in ipairs(r.metadata.narration) do
+        if r.metadata.recovery[passage.id]==r.view.view_index then controller(r):Recover(passage.id,facts) end
+    end
+end
+function C:PendingRegistration()
+    if not character() then return end
+    local names={}
+    for name in pairs(registrations) do names[#names+1]=name end
+    table.sort(names)
+    for _,name in ipairs(names) do
+        local r=registrations[name]
+        if r.state=='bound' and r.preview then
+            for _,entry in ipairs(controller(r):Collect()) do if not entry.presented then return name end end
+        end
+    end
 end

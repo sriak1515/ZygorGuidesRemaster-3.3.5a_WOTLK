@@ -66,12 +66,16 @@ function D:OnAdmission(reg,arrival)
 end
 function D:Context(reg)
     if not character() or not ZGV.CampaignData then return end
+    local entries=ZGV.CampaignData:CollectAdmitted(reg)
+    if #entries==0 and ZGV.CampaignData.PendingRegistration then
+        local pending=ZGV.CampaignData:PendingRegistration()
+        if pending then reg=pending;entries=ZGV.CampaignData:CollectAdmitted(reg) end
+    end
     if registration~=reg then
         local request=reg and automatic[reg]
         automatic={};if request then automatic[reg]=request end
         selected,manual,retained=nil,nil,nil;registration=reg
     end
-    local entries=ZGV.CampaignData:CollectAdmitted(reg)
     local P=ZGV.Presentation
     if P and P.storyOpen and P.storyEntry and not P.storyEntry.campaign then return end
     local background=ZGV.Parchment and ZGV.Parchment.background

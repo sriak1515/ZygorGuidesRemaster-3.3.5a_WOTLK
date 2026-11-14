@@ -14,6 +14,9 @@ P.Copy=copy
 
 function ZGV:GetPresentationSnapshot()
     local guide,step=self.CurrentGuide,self.CurrentStep
+    if self.CampaignPreview and not self.CampaignPreview:CanRun() then
+        return {version=1,source="live",available=false,guide={},step={total=0},goals={},navigation={},paused=true}
+    end
     local snapshot={version=1,source="live",available=guide~=nil and step~=nil,
         guide={id=self.CurrentGuideName,title=guide and (guide.title_short or guide.title)},
         step={index=self.CurrentStepNum,total=guide and guide.steps and #guide.steps or 0,

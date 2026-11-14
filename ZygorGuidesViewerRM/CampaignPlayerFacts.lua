@@ -27,7 +27,7 @@ function F:Read(requested)
     return facts
 end
 local events=CreateFrame('Frame')
-for _,event in ipairs({'PLAYER_ENTERING_WORLD','PLAYER_LEVEL_UP','BAG_UPDATE','UNIT_INVENTORY_CHANGED','PLAYER_REGEN_DISABLED'}) do events:RegisterEvent(event) end
+for _,event in ipairs({'PLAYER_ENTERING_WORLD','PLAYER_LEVEL_UP','BAG_UPDATE','UNIT_INVENTORY_CHANGED','PLAYER_REGEN_DISABLED','PARTY_MEMBERS_CHANGED','RAID_ROSTER_UPDATE','UNIT_CONNECTION','UNIT_LEVEL'}) do events:RegisterEvent(event) end
 events:SetScript('OnEvent',function(_,event,unit)
     if event=='PLAYER_REGEN_DISABLED' then
         local reader=ZGV.Parchment and ZGV.Parchment.background

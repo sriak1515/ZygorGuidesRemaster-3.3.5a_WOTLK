@@ -4338,6 +4338,12 @@ function me:SetGuide(name,step,temp)
 		guide = self:EnsureGuideParsed(guide,true)
 	end
 
+    if guide and guide.steps and self.CampaignPreview then
+        local requested=step or self:GetRememberedGuideStep(guide.title) or 1
+        local allowed,target=self.CampaignPreview:FocusTarget(guide,requested)
+        if not allowed then self:Print("Campaign preview entry is blocked; verified integration evidence is required.");return false end
+        step=target
+    end
 	if guide and guide.steps then
 		--self.MapNotes = _G["ZygorGuides_"..faction.."Mapnotes"]
 		local name = guide.title
@@ -4410,6 +4416,11 @@ function me:ClearRecentActivities()
 end
 
 function me:FocusStep(num,quiet)
+    if self.CampaignPreview then
+        local allowed,target=self.CampaignPreview:FocusTarget(self.CurrentGuide,num)
+        if not allowed then return false end
+        num=target
+    end
 	if not num or num<=0 then return end
 	if not self.CurrentGuide then return end
 	if not self.CurrentGuide.steps then
@@ -4520,6 +4531,7 @@ function me:FocusStep(num,quiet)
 	end
 
 	self:AnimateGears()
+    if self.CampaignPreview then self.CampaignPreview:OnFocused(self.CurrentGuide,self.CurrentStep) end
 	if self.Presentation then self.Presentation:Publish() end
 end
 
@@ -4583,6 +4595,7 @@ end
 --- Attempt to complete current step.
 -- 09-09-24: 
 function me:TryToCompleteStep(force)
+    if self.CampaignPreview and not self.CampaignPreview:CanRun() then return end
 	if not self.CurrentStep then return end
 	-- An explicit Context reading session holds automatic progression only.
 	-- Previous/next still use SkipStep; no authoring/completion state is changed.
@@ -4686,7 +4699,7 @@ function me:TryToCompleteStep(force)
 			if self.CampaignData then
 				self.CampaignData:BeforeAdvance(self.CurrentGuide,self.CurrentStep,stepcomplete,self.LastSkip)
 			end
-			self:SkipStep(self.LastSkip,true)
+			if self:SkipStep(self.LastSkip,true)==false then return end
 			self.fastforward=true
 
 			self.completioninterval = self.completioninterval * 0.9
@@ -4972,6 +4985,7 @@ local itemsources={"vendor","drop","ore","herb","skin"}
 local gold_ox,gold_oy=0,0
 
 function me:UpdateFrame(full,onupdate,nonsecure_only)
+    if self.CampaignPreview and not self.CampaignPreview:CanRun() then return end
 	if self.Presentation and self.Presentation.mode=="live" then return self.Presentation:Refresh() end
 	if self.ParchmentEnabled and self:ParchmentEnabled() then return self:UpdateParchment() end
 	if self.Parchment then self.Parchment:Suspend() end
@@ -7873,6 +7887,7 @@ function me:RaceClassMatchList(list)
 end
 
 function me:SkipStep(delta,fast)
+    if self.CampaignPreview and not self.CampaignPreview:BeforeSkip(delta) then return false end
 	if not self.CurrentGuide then return end
 
 	if self:InlineButtonsEnabled() and InCombatLockdown() then

@@ -1,0 +1,117 @@
+format_version: 1
+guide:
+  id: TEST
+  title: Synthetic guarded preview
+  requires_checkpoints:
+  - PREVIOUS.FULL
+steps:
+- id: TEST/start
+  goals:
+  - type: accept_quest
+    quest_id: 900
+    npc_id: 10
+  notes:
+  - Synthetic nonblocking note.
+- id: TEST/travel
+  goals:
+  - type: travel
+    to:
+      zone: Darkshore
+      x: 20
+      y: 30
+      radius: 0.5
+      show_waypoint: false
+- id: TEST/collect
+  goals:
+  - type: collect_item
+    quest_id: 900
+    objective_index: 1
+    item_id: 901
+    count: 2
+- id: TEST/object
+  goals:
+  - type: interact_object
+    object_id: 902
+    complete_when:
+      has_item:
+        item_id: 903
+        count: 1
+  - type: collect_item
+    item_id: 907
+    count: 2
+- id: TEST/producer
+  goals:
+  - type: use_item
+    item_id: 904
+    complete_when:
+      quest_rewarded: 900
+  - type: turnin_quest
+    quest_id: 900
+    npc_id: 10
+- id: TEST/earned
+  goals:
+  - type: wait_until
+    condition:
+      quest_rewarded: 900
+- id: TEST/pause
+  goals:
+  - type: wait_until
+    condition:
+      quest_rewarded: 900
+- id: TEST/return
+  goals:
+  - type: wait_until
+    condition:
+      quest_rewarded: 900
+- id: TEST/kill
+  goals:
+  - type: kill
+    quest_id: 905
+    objective_index: 1
+    npc_id: 906
+    count: 3
+- id: TEST/conditional
+  goals:
+  - type: wait_until
+    condition:
+      quest_rewarded: 905
+  only_if:
+    not:
+      quest_rewarded: 908
+narration:
+- id: opening
+  type: context
+  at_step: TEST/start
+  text: Synthetic guarded opening.
+- id: accepted
+  type: context
+  at_step: TEST/start
+  text: Synthetic accepted context.
+  requires:
+    quest_active: 900
+- id: earned
+  type: moment
+  at_step: TEST/earned
+  text: Synthetic reward moment.
+  requires:
+    quest_rewarded: 900
+- id: paused
+  type: context
+  at_step: TEST/pause
+  text: Synthetic pause context.
+  requires:
+    quest_rewarded: 900
+- id: returned
+  type: moment
+  at_step: TEST/return
+  text: Synthetic return context.
+  requires:
+    quest_rewarded: 900
+- id: object-result
+  type: context
+  at_step: TEST/object
+  text: Synthetic interaction result.
+  requires:
+    has_item:
+      item_id: 903
+      count: 1
