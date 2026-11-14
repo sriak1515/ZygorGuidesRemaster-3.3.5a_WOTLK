@@ -146,7 +146,11 @@ owner observations and Playerbot/raid checks remain separate work.
 ## Verification and remaining blockers
 
 The normal Lua regression runner and private binding command are recorded beside
-this note. Synthetic tests use actual Parser/Goal/Step, registration, SetGuide,
+this note. All 35 Lua regression scripts passed. Against a clean checkout of
+viewer implementation `2c36ee0`, the PR #6 compiler's 16 tests and guide checker's
+92 tests also passed, including the optional private preview input. These are
+offline/simulated checks; no WoW client or real owner-evidence verification occurred.
+Synthetic tests use actual Parser/Goal/Step, registration, SetGuide,
 FocusStep, SkipStep, TryToCompleteStep and SetWaypoint functions with client/API
 and owner-evidence doubles. They exercise the extended actions, concurrent proof,
 partial objective versus bags, hidden arrival, unknown negation/visibility,
