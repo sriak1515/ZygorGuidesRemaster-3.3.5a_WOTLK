@@ -221,3 +221,103 @@ function C:BeforeAdvance(guide,step,complete,direction)
             direction=direction,manual_mark=marked,authorizes_story=false})
     end
 end
+
+-- Fresh observation subsets, copied before the native pooled caches are reused.
+-- No timers, quest queries or native completion-cache reads are added here.
+local observedChar,lastLog,lastRewards,lastKnown
+local rewardTransitions={}
+local function character()
+    local char=ZGV.db and ZGV.db.char
+    if char~=observedChar then
+        observedChar,lastLog,lastRewards,lastKnown=char,nil,nil,nil;rewardTransitions={}
+        for _,r in pairs(registrations) do r.admission=nil end
+    end
+    return char
+end
+local function watched()
+    local ids={}
+    local function condition(c)
+        if not c then return end
+        local kind,value=next(c)
+        if kind=='all' or kind=='any' then for _,child in ipairs(value) do condition(child) end
+        elseif kind=='not' then condition(value)
+        elseif kind=='quest_active' or kind=='quest_rewarded' then ids[value]=true
+        elseif kind=='quest_objective_complete' then ids[value.quest_id]=true end
+    end
+    for _,r in pairs(registrations) do
+        if r.state=='bound' then
+            for _,g in ipairs(r.view.goals) do ids[g.quest_id]=true end
+            for _,p in ipairs(r.metadata.narration) do condition(p.requires) end
+        end
+    end
+    return ids
+end
+local function deliverObservations(events)
+    for _,r in pairs(registrations) do
+        if r.state=='bound' then
+            r.admission=r.admission or ZGV.CampaignAdmission.New(r.metadata,observedChar)
+            r.admission:Observe(events[r] or {},{log=lastLog,known=lastKnown,rewards=lastRewards})
+        end
+    end
+end
+function C:ObserveQuestLog(quests)
+    if not next(registrations) or not character() then return end
+    local log,known={},watched()
+    for id in pairs(known) do
+        local quest=quests[id]
+        if quest then
+            local goals={}
+            for index,goal in ipairs(quest.goals or {}) do goals[index]={num=goal.num,needed=goal.needed} end
+            log[id]={complete=quest.complete==true,goals=goals}
+        end
+    end
+    local events={}
+    local r=ZGV.CurrentGuide and registrations[ZGV.CurrentGuide.title]
+    local step=ZGV.CurrentStep
+    if lastLog and r and r.state=='bound' and r.guide==ZGV.CurrentGuide and r.steps==r.guide.steps and r.source[step] then
+        local marked=false
+        for _,goal in ipairs(step.goals) do
+            if ZGV.recentlyStickiedGoals and ZGV.recentlyStickiedGoals[goal] then marked=true end
+        end
+        if not marked then
+            for _,g in ipairs(r.view.goals) do
+                if g.source_step_id==r.source[step] and lastKnown[g.quest_id] then
+                    local old,new=lastLog[g.quest_id],log[g.quest_id]
+                    local kind,baseline
+                    if g.action=='accept_quest' and not old and new then kind='accept'
+                    elseif g.action=='kill' and old and new then
+                        local a,b=old.goals[g.objective_index],new.goals[g.objective_index]
+                        if a and b and type(a.num)=='number' and type(b.num)=='number' and b.num>a.num then kind='kill' end
+                    elseif g.action=='turnin_quest' and old and old.complete and not new then
+                        baseline=lastRewards and (lastRewards[g.quest_id]==false or rewardTransitions[g.quest_id]==true)
+                        if baseline then kind='turnin' end
+                    end
+                    if kind then
+                        events[r]=events[r] or {}
+                        events[r][#events[r]+1]={source_step_id=g.source_step_id,kind=kind,quest_id=g.quest_id,reward_baseline=baseline}
+                    end
+                end
+            end
+        end
+    end
+    -- Clear reward transitions when a quest is freshly retaken.
+    if lastLog then for id in pairs(log) do if not lastLog[id] then rewardTransitions[id]=nil end end end
+    lastLog,lastKnown=log,known
+    deliverObservations(events)
+end
+function C:ObserveCompletedQuests(quests)
+    if not next(registrations) or not character() then return end
+    local rewards={}
+    for id in pairs(watched()) do
+        rewards[id]=quests[id]==true or quests[id]==1
+        if lastRewards and lastRewards[id]==false and rewards[id] then rewardTransitions[id]=true end
+    end
+    lastRewards=rewards
+    deliverObservations({}) -- a query alone cannot manufacture an anchor
+end
+function C:CollectAdmitted(registration)
+    if not character() then return {} end
+    local r=registrations[registration]
+    if not r or r.state~='bound' or not r.admission then return {} end
+    return r.admission:Collect()
+end

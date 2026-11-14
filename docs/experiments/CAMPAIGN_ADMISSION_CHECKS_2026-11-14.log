@@ -1,0 +1,35 @@
+PASS static: all top-level addon Lua parses under Lua 5.1
+PASS static: TOC/XML presentation loading order
+PASS simulated: tools/gearfinder/test_crafted.lua
+PASS simulated: tools/gearfinder/test_open_cache.lua
+PASS simulated: tools/goal/test_equipped_items.lua
+PASS simulated: tools/goal/test_fpath_startup.lua
+PASS simulated: tools/gold/test_auction_button.lua
+PASS simulated: tools/guides/test_brewfest.lua
+PASS simulated: tools/guides/test_emerald_nightmare_return.lua
+PASS simulated: tools/guides/test_horde_loremaster.lua
+PASS simulated: tools/guides/test_leechsteps.lua
+PASS simulated: tools/guides/test_necklace_repair.lua
+PASS simulated: tools/guides/test_until_completion.lua
+PASS simulated: tools/itemscore/test_live_stats.lua
+PASS simulated: tools/parser/test_distance_comparators.lua
+PASS simulated: tools/parser/test_multi_quest_conditions.lua
+PASS simulated: tools/parser/test_only_if_race_class.lua
+PASS simulated: tools/pointer/test_corpse_priority.lua
+PASS simulated: tools/pointer/test_route_zone_refresh.lua
+PASS simulated: tools/pointer/test_zone_transition_refresh.lua
+PASS simulated: tools/presentation/test_banethil_story.lua
+PASS simulated: tools/presentation/test_campaign_advancement.lua
+PASS simulated: tools/presentation/test_campaign_predicates.lua
+PASS simulated: tools/presentation/test_presentation.lua
+PASS simulated: tools/ui/test_adventure_fixture.lua
+PASS simulated: tools/ui/test_classic_options_fallback.lua
+PASS simulated: tools/ui/test_guide_menu_hover.lua
+PASS simulated: tools/ui/test_locale_fonts.lua
+PASS simulated: tools/ui/test_parchment.lua
+PASS simulated: tools/ui/test_parchment_assets.lua
+PASS simulated: tools/ui/test_parchment_fixtures.lua
+PASS simulated: tools/ui/test_parchment_guides.lua
+PASS simulated: tools/ui/test_parchment_interactions.lua
+PASS simulated: tools/ui/test_parchment_options.lua
+PASS all Lua regression scripts; no WoW client verification

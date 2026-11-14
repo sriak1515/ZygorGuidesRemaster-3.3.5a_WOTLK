@@ -63,6 +63,7 @@
 	<Include file="ZygorGuidesViewerFrame.xml" />
 	<Script file="Parchment.lua"/>
 	<Script file="CampaignHash.lua"/>
+	<Script file="CampaignAdmission.lua"/>
 	<Script file="CampaignData.lua"/>
 	<Script file="Presentation.lua"/>
 	<Script file="BanethilStory.lua"/>

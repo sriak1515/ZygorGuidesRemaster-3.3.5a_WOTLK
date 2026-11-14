@@ -71,6 +71,7 @@ local waypoints,frames=0,0
 ZGV.SetWaypoint=function()waypoints=waypoints+1 end
 ZGV.UpdateFrame=function()frames=frames+1 end
 assert(loadfile(root..'/CampaignHash.lua'))()
+assert(loadfile(root..'/CampaignAdmission.lua'))()
 assert(loadfile(root..'/CampaignData.lua'))()
 local C=ZGV.CampaignData
 assert(ZGV.RegisterCampaignGuideMetadata==nil,'unfinished narrative consumer must not accept installed packages')
@@ -226,3 +227,127 @@ for _,condition in ipairs({{class_is='Druid'},{race_is='NightElf'},{all={{quest_
  fresh();local m=metadata();m.narration[1].requires=condition;assert(C:Stage(m))
 end
 fresh();register();assert(not C:Stage(metadata()),'late metadata accepted after native registration')
+
+-- Exercise admission at the ACTUAL fresh-cache boundaries, before native callbacks
+-- and advancement. Pooled quest objects are deliberately reused by QuestTracking.
+table.wipe=function(t)for k in pairs(t)do t[k]=nil end end
+local clock,clientLog,clientRewards=100,{},{}
+GetTime=function()return clock end
+GetQuestLogTitle=function(i)
+ local q=clientLog[i]
+ if q then return 'Played quest',1,nil,0,false,false,q.complete and 1 or nil,false,q.id end
+end
+GetNumQuestLeaderBoards=function(i)return #(clientLog[i].goals or {})end
+GetQuestLogLeaderBoard=function(objective,index)
+ local goal=clientLog[index].goals[objective]
+ return string.format(QUEST_MONSTERS_KILLED,'Client creature '..objective,goal.num,goal.needed),'monster',goal.num>=goal.needed
+end
+GetQuestsCompleted=function()local copy={}for k,v in pairs(clientRewards)do copy[k]=v end return copy end
+ERR_QUEST_COMPLETE_S='%s completed.'
+ZGV.startups={};ZGV.recentlyAcceptedQuests={};ZGV.bandwidth=100;ZGV.questLogInitialized=true
+ZGV.NewQuestEvent=function()end;ZGV.LostQuestEvent=function()end
+assert(loadfile(root..'/QuestTracking.lua'))()
+-- Keep the harness's quest-availability double: the checker has separate coverage
+-- of IsQuestPossible; this test concerns fresh evidence and advancement ordering.
+ZGV.IsQuestPossible=function()return true end
+local function session(value,char)
+ fresh();ZGV.db.char=char or {guides_history={},permaCompletedDailies={}}
+ ZGV.quests={};ZGV.questsbyid={};ZGV.completedQuests={};ZGV.recentlyAcceptedQuests={}
+ ZGV.pause=nil;ZGV.LastSkip=1;ZGV.lasttriedstep=nil;ZGV.lastwascompleted=nil
+ assert(C:Stage(value or metadata()));local g=register();ZGV:EnsureGuideParsed(g)
+ ZGV.CurrentGuide=g;ZGV.CurrentGuideName=registration;ZGV:FocusStep(1)
+ clientLog={};clientRewards={}
+ return g
+end
+local function refresh(log)
+ clientLog=log;clock=clock+1
+ ZGV:QUEST_LOG_UPDATE_QuestTracking()
+end
+local function query(rewards)
+ clientRewards=rewards;clock=clock+1;ZGV:QUEST_QUERY_COMPLETE_QuestTracking()
+end
+local function admitted()return C:CollectAdmitted(registration)end
+local function quest(a,b,complete)
+ return {{id=456,complete=complete,goals={{num=a,needed=7},{num=b,needed=4}}}}
+end
+session();refresh({});query({})
+assert(#admitted()==0 and ZGV.db.char.campaignAdmission==nil)
+refresh(quest(0,0))
+assert(ZGV.CurrentStepNum==2 and #admitted()==1,'acceptance story lost on immediate advancement')
+local context=admitted()[1];assert(context.type=='context')
+context.body='changed by caller';assert(admitted()[1].body~='changed by caller')
+refresh(quest(6,4));assert(ZGV.CurrentStepNum==2 and #admitted()==1)
+refresh(quest(7,4,true));assert(ZGV.CurrentStepNum==3 and #admitted()==1)
+-- Native mutable completion can advance immediately while the server query lags.
+ZGV.completedQuests[456]=true
+refresh({})
+assert(ZGV.CurrentStep.finish and #admitted()==1,'mutable cache authorized reward story')
+local saved=ZGV.db.char
+assert(saved.campaignAdmission and saved.banethilStory==nil)
+for _,r in pairs(saved.campaignAdmission.guides[metadata().guide.id].passages) do
+ assert(r.presented==nil and r.body==nil and r.title==nil,'pending facts became history or stored prose')
+end
+query({[456]=true})
+assert(#admitted()==2 and admitted()[2].type=='moment','delayed fresh reward did not resolve real pending anchor')
+local firstBody,secondBody=admitted()[1].body,admitted()[2].body
+query({[456]=true});refresh({});assert(#admitted()==2,'duplicate admission')
+-- Reload retains pending/eligible facts by character + passage revision; bare
+-- historical quest state in a fresh character must never create an encounter.
+session(nil,saved);refresh({});query({[456]=true})
+assert(#admitted()==2 and admitted()[1].body==firstBody and admitted()[2].body==secondBody)
+session();refresh({});query({[456]=true});ZGV:FocusStep(3)
+refresh({});query({[456]=true});assert(#admitted()==0,'historical query manufactured an encounter')
+-- Initial log snapshot containing an active quest is baseline, not acceptance.
+session();refresh(quest(0,0));assert(#admitted()==0)
+-- Browsing ahead, manual marks and generic native callbacks cannot reveal story.
+session();refresh({});query({});ZGV:FocusStep(3);refresh(quest(0,0));assert(#admitted()==0)
+ZGV:FocusStep(1);ZGV.recentlyStickiedGoals[ZGV.CurrentStep.goals[3]]=true
+refresh({});refresh(quest(0,0));assert(#admitted()==0)
+-- An abandoned completed quest remains unconfirmed; retaking cancels its candidate.
+session();refresh(quest(7,4,true));query({});ZGV:FocusStep(3)
+refresh({});query({});assert(#admitted()==0)
+refresh(quest(0,0));ZGV:FocusStep(2);refresh({});query({[456]=true})
+assert(#admitted()==0,'retake confirmed a previous abandonment')
+-- No extra requires still needs confirmed turn-in action, not merely disappearance.
+local m=metadata();m.narration[2].requires=nil
+session(m);refresh(quest(7,4,true));query({});ZGV:FocusStep(3)
+refresh({});query({});assert(#admitted()==0)
+-- A real pending removal survives reload before its delayed reward query.
+local pending=ZGV.db.char
+session(m,pending);refresh({});query({[456]=true})
+assert(#admitted()==1 and admitted()[1].type=='moment')
+-- Changed prose revision cannot inherit the old passage's authorization.
+m=metadata();m.narration[1].revision=string.rep('a',64);m.narration[2].revision=string.rep('b',64)
+session(m,saved);refresh({});query({[456]=true});assert(#admitted()==0)
+-- Unknown reveal evidence, including under NOT, does not admit an encountered passage.
+m=metadata();m.narration[1].requires={['not']={quest_objective_complete={quest_id=999,objective_index=1}}}
+session(m);refresh({});query({});refresh(quest(0,0));assert(#admitted()==0)
+-- Definitions bound after a baseline need their own observed baseline; previously
+-- unwatched absence must not be mistaken for a new quest acceptance.
+session();refresh({});query({})
+local later=metadata();later.guide.id='SECOND';later.native_views[1].registration='Second'
+for _,g in ipairs(later.native_views[1].goals)do g.quest_id=999 end
+local laterRaw=raw:gsub('456','999');later.native_views[1].payload_sha256=ZGV:CampaignPayloadHash(laterRaw)
+assert(C:Stage(later));ZGV:RegisterGuide('Second',laterRaw)
+local laterGuide=ZGV.registeredguides[#ZGV.registeredguides];ZGV:EnsureGuideParsed(laterGuide)
+ZGV.CurrentGuide=laterGuide;ZGV.CurrentGuideName='Second';ZGV:FocusStep(1)
+local laterQuest=quest(0,0);laterQuest[1].id=999
+refresh(laterQuest);assert(#C:CollectAdmitted('Second')==0)
+-- Unsupported/future saved-state versions are preserved and fail closed.
+local future={guides_history={},permaCompletedDailies={},campaignAdmission={version=99,guides={}}}
+session(nil,future);refresh({});query({});refresh(quest(0,0))
+assert(#admitted()==0 and future.campaignAdmission.version==99)
+assert(ZGV.RegisterCampaignGuideMetadata==nil,'delivery remains gated')
+print('PASS actual quest hooks + admission: live anchors before advancement, delayed reward/reload, abandonment, character/revision isolation, no historical backfill, manual/browse denial and future-state preservation')
+
+-- Fresh partial objective progress qualifies a kill anchor; pooled cache aliases
+-- or merely focusing the step cannot simulate that progress.
+m=metadata();m.narration[1].at_step=m.native_views[1].steps[2].source_step_id
+session(m);refresh(quest(0,0));query({});assert(ZGV.CurrentStepNum==2 and #admitted()==0)
+refresh(quest(0,0));assert(#admitted()==0)
+refresh(quest(1,0));assert(#admitted()==1)
+-- A fresh reward response arriving before log removal also resolves, but only
+-- after absence is observed at the actual turn-in anchor.
+session();refresh(quest(7,4,true));query({});ZGV:FocusStep(3)
+query({[456]=true});assert(#admitted()==0)
+refresh({});assert(#admitted()==1 and admitted()[1].type=='moment')
