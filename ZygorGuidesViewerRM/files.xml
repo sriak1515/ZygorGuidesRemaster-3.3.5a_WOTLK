@@ -64,6 +64,7 @@
 	<Script file="Parchment.lua"/>
 	<Script file="CampaignHash.lua"/>
 	<Script file="CampaignAdmission.lua"/>
+	<Script file="CampaignPlayerFacts.lua"/>
 	<Script file="CampaignData.lua"/>
 	<Script file="CampaignDelivery.lua"/>
 	<Script file="Presentation.lua"/>

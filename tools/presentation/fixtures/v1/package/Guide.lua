@@ -1,0 +1,3 @@
+local _, package = ...
+if not package.accepted then return end
+ZygorGuidesViewer:RegisterGuide("WoW Solo Adventure V1\\EXAMPLE-KAL-01-BALANCE-ONE","author WoW Solo Adventure\010type leveling\010startlevel 1\010step\010label \"KAL-01/accept-balance-one\"\010goto Teldrassil,58.6,44.7 |n\010talk Quest contact##2079 |n\010accept Quest##456\010step\010label \"KAL-01/complete-balance-one\"\010goto Teldrassil,62.0,42.6 |n\010kill 7 Creature##2031 |q 456/1 |tip Look for young nightsabers along the Shadowglen paths.\010kill 4 Creature##1984 |q 456/2 |tip Look for young thistle boars in the same general area.\010step\010label \"KAL-01/reward-balance-one\"\010goto Teldrassil,58.6,44.7 |n\010talk Quest contact##2079 |n\010turnin Quest##456\010")

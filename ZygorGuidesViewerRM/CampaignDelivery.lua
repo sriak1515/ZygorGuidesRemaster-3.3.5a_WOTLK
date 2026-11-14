@@ -34,7 +34,12 @@ function D:SetMode(kind,value)
 end
 local function blocked()
     local P=ZGV.Presentation
-    if not P or P.mode~='live' or P.fixture or P.storyOpen or P.moving or P.sizing then return true end
+    if not P or P.fixture or P.storyOpen or P.moving or P.sizing then return true end
+    if P.mode~='live' then
+        if not D.fallbackEnabled then return true end
+        local parchment=ZGV.Parchment
+        if parchment and ((parchment.background and parchment.background:IsShown()) or (parchment.ReadingActive and parchment:ReadingActive())) then return true end
+    end
     if not ZGV.Frame or not ZGV.Frame:IsVisible() or ZGV.Frame:GetAlpha()<0.1 then return true end
     if InCombatLockdown() then return true end
     if UnitCastingInfo and UnitCastingInfo('player') then return true end
@@ -69,6 +74,8 @@ function D:Context(reg)
     local entries=ZGV.CampaignData:CollectAdmitted(reg)
     local P=ZGV.Presentation
     if P and P.storyOpen and P.storyEntry and not P.storyEntry.campaign then return end
+    local background=ZGV.Parchment and ZGV.Parchment.background
+    if background and background:IsShown() and background.entry and not background.entry.campaign then return end
     local pinned=manual or retained or (P and P.storyOpen and P.storyEntry and P.storyEntry.campaign and P.storyEntry.registration==reg)
     if automatic[reg] and blocked() then automatic[reg]=nil end
     local entry,pending,requested
@@ -108,4 +115,59 @@ function D:MarkVisible(entry)
     local marked=ZGV.CampaignData:MarkPresented(entry.registration,entry.id,entry.revision)
     if marked then automatic[entry.registration]=nil;manual=nil;retained=selected end
     return marked
+end
+
+-- Reuse Parchment's movable authored-prose reader for original-interface access.
+function D:OpenFallback(entry)
+    if not entry or not entry.campaign or InCombatLockdown() or not ZGV.Parchment then return false end
+    ZGV.Parchment:OpenBackground(entry)
+    local reader=ZGV.Parchment.background
+    if reader and reader:IsVisible() and reader:GetAlpha()>=0.1 and ZGV.Frame:IsVisible() and ZGV.Frame:GetAlpha()>=0.1 then
+        return self:MarkVisible(entry)
+    end
+    return false
+end
+function D:RefreshFallback(snapshot)
+    local P=ZGV.Presentation
+    if P and P.mode then
+        if self.fallbackButton then self.fallbackButton:Hide() end
+        return
+    end
+    local reader=ZGV.Parchment and ZGV.Parchment.background
+    if reader and reader.entry and reader.entry.campaign then
+        if not ZGV.Frame:IsVisible() or ZGV.Frame:GetAlpha()<0.1 or reader.ownerGuide~=ZGV.CurrentGuide
+            or not snapshot.context or not snapshot.context.campaign or key(reader.entry)~=key(snapshot.context) then
+            ZGV.Parchment:CloseBackground(true)
+        end
+    end
+    local entry=snapshot.context
+    if not entry or not entry.campaign or not ZGV.Frame:IsVisible() or ZGV.Frame:GetAlpha()<0.1 then
+        if self.fallbackButton then self.fallbackButton:Hide() end
+        return
+    end
+    if not self.fallbackButton then
+        local button=CreateFrame('Button',nil,ZGV.Frame)
+        button:SetSize(72,22);button:SetPoint('BOTTOMRIGHT',ZGV.Frame,'TOPRIGHT',-4,2)
+        button.label=button:CreateFontString(nil,'ARTWORK')
+        local font=GameFontNormal and GameFontNormal:GetFont() or STANDARD_TEXT_FONT
+        button.label:SetFont(font,12);button.label:SetPoint('CENTER')
+        button:RegisterForClicks('LeftButtonUp','RightButtonUp')
+        ZGV.Parchment:StyleButton(button)
+        button:SetScript('OnClick',function(_,mouse)
+            if InCombatLockdown() then return end
+            local current=ZGV.Parchment.background
+            if current and current:IsShown() and mouse~='RightButton' then ZGV.Parchment:CloseBackground();return end
+            if mouse=='RightButton' and not D:RecallPrevious(ZGV.CurrentGuideName) then return end
+            D:OpenFallback(D:Context(ZGV.CurrentGuideName))
+        end)
+        self.fallbackButton=button
+    end
+    self.fallbackButton.label:SetText(entry.cue and 'Story !' or 'Story')
+    self.fallbackButton:Show()
+    if entry.autoOpen then self:OpenFallback(entry) end
+end
+function D:EnableFallback()
+    if self.fallbackEnabled then return end
+    self.fallbackEnabled=true
+    self.fallbackUnsubscribe=ZGV:SubscribePresentation(function(snapshot) D:RefreshFallback(snapshot) end)
 end

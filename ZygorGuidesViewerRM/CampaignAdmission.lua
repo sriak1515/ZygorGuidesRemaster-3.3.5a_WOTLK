@@ -30,9 +30,17 @@ local function evaluate(condition,facts)
         if goal and type(goal.num)=='number' and type(goal.needed)=='number' and goal.needed>0 then
             return goal.num>=goal.needed
         end
+    elseif kind=='class_is' then
+        if facts.player and facts.player.class then return facts.player.class==value end
+    elseif kind=='race_is' then
+        if facts.player and facts.player.race then return facts.player.race==value end
+    elseif kind=='level_at_least' then
+        if facts.player and facts.player.level then return facts.player.level>=value.level end
+    elseif kind=='has_item' then
+        local count=facts.player and facts.player.items and facts.player.items[value.item_id]
+        if count~=nil then return count>=value.count end
     end
-    -- Non-quest predicates stay unknown until their fresh observation contract
-    -- exists. In particular, NOT(unknown) is never permission to reveal.
+    -- Missing or unavailable observations remain unknown, including under NOT.
 end
 A.Evaluate=evaluate
 function A.New(metadata,char)
@@ -57,6 +65,7 @@ function A.New(metadata,char)
             and type(p.qualified)=='boolean' and type(p.reward_baseline)=='boolean'
     end
     function controller:Observe(events,facts)
+        self:ObserveCheckpoints(facts)
         local saved=state(false)
         local arrivals={}
         -- A fresh matching action is the anchor; selecting/focusing a step is not.
@@ -145,6 +154,51 @@ function A.New(metadata,char)
         end
         table.sort(result,function(a,b)return a.order<b.order end)
         return result
+    end
+    local function canonical(value)
+        if type(value)~='table' then return type(value)..':'..string.format('%q',tostring(value)) end
+        local keys,parts={},{}
+        for k in pairs(value) do keys[#keys+1]=k end
+        table.sort(keys,function(a,b)return tostring(a)<tostring(b)end)
+        for _,k in ipairs(keys) do parts[#parts+1]=canonical(k)..'='..canonical(value[k]) end
+        return '{'..table.concat(parts,';')..'}'
+    end
+    local checkpointHashes={}
+    local function checkpointRevision(checkpoint)
+        if checkpointHashes[checkpoint.id] then return checkpointHashes[checkpoint.id] end
+        local revision=ZGV:CampaignPayloadHash(canonical({guide=metadata.guide.id,id=checkpoint.id,
+            at_step=checkpoint.at_step,proof=checkpoint.proof}))
+        checkpointHashes[checkpoint.id]=revision
+        return revision
+    end
+    function controller:ObserveCheckpoints(facts)
+        for _,checkpoint in ipairs(metadata.checkpoints or {}) do
+            if evaluate(checkpoint.proof,facts)==true then
+                local root=char.campaignCheckpoints
+                if root==nil then root={version=1,guides={}};char.campaignCheckpoints=root end
+                if type(root)=='table' and root.version==1 and type(root.guides)=='table' then
+                    local guide=root.guides[metadata.guide.id]
+                    if guide==nil then guide={};root.guides[metadata.guide.id]=guide end
+                    if type(guide)=='table' then
+                        local revision=checkpointRevision(checkpoint)
+                        if type(guide[checkpoint.id])~='table' or guide[checkpoint.id].proof_revision~=revision then
+                            guide[checkpoint.id]={proof_revision=revision,verified=true}
+                        end
+                    end
+                end
+            end
+        end
+    end
+    function controller:IsCheckpointProven(id)
+        local root=char.campaignCheckpoints
+        local guide=type(root)=='table' and root.version==1 and type(root.guides)=='table' and root.guides[metadata.guide.id]
+        for _,checkpoint in ipairs(metadata.checkpoints or {}) do
+            local record=type(guide)=='table' and guide[checkpoint.id]
+            if checkpoint.id==id and type(record)=='table' and record.verified==true then
+                return record.proof_revision==checkpointRevision(checkpoint)
+            end
+        end
+        return false
     end
     return controller
 end

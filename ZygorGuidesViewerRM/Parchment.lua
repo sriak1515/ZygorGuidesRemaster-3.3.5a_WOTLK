@@ -487,7 +487,9 @@ end
 -- Explicit authored payload only; neither plain text nor |context is classified
 -- as optional background. This small API is used by the product fixture, not a
 -- new guide grammar. The reader never sets expandedReading or pauses the engine.
-function P:CloseBackground()
+function P:CloseBackground(interrupted)
+    local entry=self.background and self.background.entry
+    if entry and entry.campaign and ZGV.CampaignDelivery then ZGV.CampaignDelivery:Close(entry,interrupted) end
     if self.background then self.background:StopMovingOrSizing(); self.background:Hide() end
 end
 
@@ -571,7 +573,9 @@ function P:OpenBackground(entry)
         self.background=f
     end
     local f=self.background
-    local changed=f.entry~=entry or f.ownerGuide~=ZGV.CurrentGuide
+    local sameCampaign=entry.campaign and f.entry and f.entry.campaign
+        and entry.registration==f.entry.registration and entry.id==f.entry.id and entry.revision==f.entry.revision
+    local changed=(f.entry~=entry and not sameCampaign) or f.ownerGuide~=ZGV.CurrentGuide
     if changed then
         f.entry=entry; f.ownerGuide=ZGV.CurrentGuide; f.pane.readingAnchor=nil
         f.goal={text=entry.body,GetStatus=function() return "passive" end}
@@ -591,6 +595,8 @@ function P:OpenBackground(entry)
         end
         f.placed=true
     end
+    f.entry=entry
+    f.caption:SetText(entry.campaign and "Story" or "Background")
     f:Show(); self:LayoutBackground(changed)
 end
 

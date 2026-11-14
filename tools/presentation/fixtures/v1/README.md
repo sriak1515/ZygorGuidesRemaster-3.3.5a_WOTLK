@@ -15,3 +15,10 @@ the campaign checkout and current source work were not touched.
 compiler/source/schema hashes. Target-viewer revision records the earlier review
 baseline; it is provenance, not a compatibility check. These fixtures test addon
 staging/binding and native advancement; they do not establish narrative delivery.
+
+`package/Metadata.lua` and `package/Guide.lua` are the unmodified actual compiler
+files generated at the same compiler commit against clean viewer `a51a854` for
+public-loader regression tests. They use the same played source and native bytes.
+Target-viewer SHA remains provenance; binding checks the payload and parsed mapping.
+The installable test build is generated separately against the final committed
+consumer, rather than relabeling these fixture files as a release.

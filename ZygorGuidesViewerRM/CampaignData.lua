@@ -1,5 +1,5 @@
--- Experimental v1 binding foundation. Deliberately does NOT implement the public
--- RegisterCampaignGuideMetadata gate until admission/delivery semantics exist.
+-- Experimental compiled interface v1 consumer, restricted to the proven native
+-- pilot mapping shapes. Unsupported definitions are rejected before registration.
 -- Definitions stay in this closure, outside presentation snapshots/saved state.
 local ZGV=ZygorGuidesViewer
 if not ZGV then return end
@@ -144,6 +144,7 @@ function C:Stage(metadata)
     return true
 end
 local function fail(record,code)
+    if record.code~=code and ZGV.Print then ZGV:Print('Compiled campaign inactive ('..code..').') end
     record.state,record.code,record.steps,record.source='inactive',code,nil,nil
 end
 function C:OnRegistered(guide)
@@ -187,7 +188,15 @@ function C:OnParsed(guide)
         end
     end
     for step in pairs(source) do
+        if step.next or step.condition_visible or step.condition_until or step.requirement then fail(r,'unsupported-native-step');return end
         for _,goal in ipairs(step.goals) do
+            if goal.next or goal.orlogic or goal.condition_visible or goal.condition_complete then fail(r,'unsupported-native-goal');return end
+            if mapped[goal] and goal.force_nocomplete then fail(r,'passive-gameplay-goal');return end
+            if not mapped[goal] and goal.action~='accept' and goal.action~='turnin' and goal.action~='kill' then
+                if goal.action=='goto' or goal.action=='talk' then
+                    if not goal.force_nocomplete then fail(r,'blocking-guidance');return end
+                elseif goal.action and goal.action~='' then fail(r,'unsupported-native-goal');return end
+            end
             if (goal.action=='accept' or goal.action=='turnin' or goal.action=='kill') and not mapped[goal] then
                 fail(r,'unmapped-goal');return
             end
@@ -198,7 +207,7 @@ end
 -- Detached, spoiler-safe inspection; never return definitions, IDs or passage counts.
 function ZGV:GetCampaignGuideStatus(registration)
     local r=registrations[registration]
-    return r and {state=r.state,code=r.code,delivery='internal-only'} or nil
+    return r and {state=r.state,code=r.code,delivery='experimental-v1'} or nil
 end
 local observers={}
 function C:SubscribeAdvancement(callback)
@@ -235,28 +244,35 @@ local function character()
     return char
 end
 local function watched()
-    local ids={}
+    local ids,player={},{items={}}
     local function condition(c)
         if not c then return end
         local kind,value=next(c)
         if kind=='all' or kind=='any' then for _,child in ipairs(value) do condition(child) end
         elseif kind=='not' then condition(value)
         elseif kind=='quest_active' or kind=='quest_rewarded' then ids[value]=true
-        elseif kind=='quest_objective_complete' then ids[value.quest_id]=true end
+        elseif kind=='quest_objective_complete' then ids[value.quest_id]=true
+        elseif kind=='class_is' then player.class=true
+        elseif kind=='race_is' then player.race=true
+        elseif kind=='level_at_least' then player.level=true
+        elseif kind=='has_item' then player.items[value.item_id]=true end
     end
     for _,r in pairs(registrations) do
         if r.state=='bound' then
             for _,g in ipairs(r.view.goals) do ids[g.quest_id]=true end
             for _,p in ipairs(r.metadata.narration) do condition(p.requires) end
+            for _,p in ipairs(r.metadata.checkpoints) do condition(p.proof) end
         end
     end
-    return ids
+    return ids,player
 end
 local function deliverObservations(events)
+    local _,requested=watched()
+    local player=ZGV.CampaignPlayerFacts and ZGV.CampaignPlayerFacts:Read(requested)
     for _,r in pairs(registrations) do
         if r.state=='bound' then
             r.admission=r.admission or ZGV.CampaignAdmission.New(r.metadata,observedChar)
-            local arrivals=r.admission:Observe(events[r] or {},{log=lastLog,known=lastKnown,rewards=lastRewards})
+            local arrivals=r.admission:Observe(events[r] or {},{log=lastLog,known=lastKnown,rewards=lastRewards,player=player})
             if ZGV.CampaignDelivery then
                 for _,arrival in ipairs(arrivals or {}) do ZGV.CampaignDelivery:OnAdmission(r.view.registration,arrival) end
             end
@@ -337,4 +353,23 @@ function C:CollectPresented(registration)
     local r=registrations[registration]
     if not r or r.state~='bound' or not r.admission then return {} end
     return r.admission:History()
+end
+
+function C:ObservePlayerFacts()
+    if next(registrations) and character() then deliverObservations({}) end
+end
+function C:IsCheckpointProven(registration,id)
+    self:CollectAdmitted(registration)
+    local r=registrations[registration]
+    return r and r.state=='bound' and r.admission and r.admission:IsCheckpointProven(id) or false
+end
+function ZGV:RegisterCampaignGuideMetadata(metadata)
+    if not self.CampaignPlayerFacts or not self.CampaignDelivery or not self.SubscribePresentation then return false end
+    local accepted,code=C:Stage(metadata)
+    if not accepted then
+        if self.Print then self:Print('Compiled campaign metadata rejected ('..code..').') end
+        return false
+    end
+    self.CampaignDelivery:EnableFallback()
+    return true -- staged, not yet bound; native payload/mapping checks still apply
 end

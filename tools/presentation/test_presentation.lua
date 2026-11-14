@@ -54,6 +54,8 @@ function Frame:SetScale(v)
     if changed and self.scripts.OnSizeChanged then self.scripts.OnSizeChanged(self) end
 end
 function Frame:GetValue() return self.value or 0 end
+function Frame:SetThumbTexture() self.thumb=frame(self) end
+function Frame:GetThumbTexture() return self.thumb end
 function Frame:GetFrameStrata() return "MEDIUM" end
 function Frame:CreateTexture() return frame(self) end
 function Frame:SetAllPoints(target) self.allpoints=target or self.parent end
@@ -61,6 +63,7 @@ function Frame:SetMinMaxValues(lo,hi) self.lo,self.hi=lo,hi end
 function Frame:SetValue(value)
     self.value=value
     if self.scrollOwner then self.scrollOwner:SetVerticalScroll(value) end
+    if self.scripts.OnValueChanged then self.scripts.OnValueChanged(self,value) end
 end
 function Frame:SetVerticalScroll(value)
     self.offset=value
@@ -69,7 +72,7 @@ end
 function Frame:CreateFontString() return frame(self) end
 function Frame:SetPoint(...) self.point={...} end
 function Frame:ClearAllPoints() self.point=nil end
-for _,k in ipairs({"SetStatusBarTexture","SetStatusBarColor","SetDesaturated","RegisterForClicks","RegisterForDrag","SetMovable","SetResizable","SetFrameStrata","SetVertexColor","SetTexCoord","SetBackdropBorderColor","SetHighlightTexture","SetTexture","SetClampedToScreen","EnableMouseWheel","UpdateScrollChildRect","SetTextColor","SetJustifyV","SetSpacing","SetBackdrop","SetBackdropColor","SetScrollChild","SetJustifyH","RegisterEvent"}) do Frame[k]=function() end end
+for _,k in ipairs({"SetOrientation","SetValueStep","SetObeyStepOnDrag","SetStatusBarTexture","SetStatusBarColor","SetDesaturated","RegisterForClicks","RegisterForDrag","SetMovable","SetResizable","SetFrameStrata","SetVertexColor","SetTexCoord","SetBackdropBorderColor","SetHighlightTexture","SetTexture","SetClampedToScreen","EnableMouseWheel","UpdateScrollChildRect","SetTextColor","SetJustifyV","SetSpacing","SetBackdrop","SetBackdropColor","SetScrollChild","SetJustifyH","RegisterEvent"}) do Frame[k]=function() end end
 UIParent=frame()
 UIParent:SetSize(1920,1080)
 STANDARD_TEXT_FONT="test-font"
@@ -637,5 +640,34 @@ P:Start('live');assert(not P.storyOpen and ZGV.db.char==deliveredChar)
 assert(delivery:Mode('moment')=='open' and #admission:History()==5)
 P:Start('fixture');assert(P.mode=='fixture');P:ToggleStory();assert(#admission:History()==5)
 P:Stop()
-assert(ZGV.RegisterCampaignGuideMetadata==nil)
+assert(ZGV.RegisterCampaignGuideMetadata==nil or type(ZGV.RegisterCampaignGuideMetadata)=='function')
 print('PASS actual reader delivery: visible-only history, no snapshot enrollment, pinned passage/scroll, combat tuck, presented-only recall, fit/visibility/opacity guards, quiet reload and navigation isolation')
+
+-- Original-interface delivery uses the REAL existing Parchment background reader.
+assert(loadfile(root..'/CampaignPlayerFacts.lua'))()
+local evidenceFrame=frames[#frames]
+authored.narration[#authored.narration+1]={id='fallback',revision='r7',type='context',at_step='g',title='Fallback story',text=string.rep('A safe fallback paragraph.\n',70)}
+ZGV.CampaignData.MarkPresented=function(_,_,id,revision)
+ local reader=ZGV.Parchment.background
+ if P.mode=='live' then assert(P.storyPanel:IsVisible())
+ else assert(reader and reader:IsVisible() and reader.goal.text==reader.entry.body)end
+ return admission:MarkPresented(id,revision)
+end
+delivery:EnableFallback();arrival('g')
+assert(delivery.fallbackButton:IsVisible() and #admission:History()==5)
+local fallbackNavigation=waypoints
+delivery.fallbackButton.scripts.OnClick(nil,'LeftButton')
+local reader=ZGV.Parchment.background
+assert(reader:IsVisible() and reader.caption.text=='Story' and #admission:History()==6)
+reader.pane.offset=60;reader.pane.bar:SetValue(60)
+P:Publish();assert(reader.pane.bar:GetValue()==60,'fallback refresh reset scroll')
+combat=true;evidenceFrame.scripts.OnEvent(evidenceFrame,'PLAYER_REGEN_DISABLED')
+assert(not reader:IsShown() and #admission:History()==6)
+combat=false;P:Publish();assert(not reader:IsShown(),'combat exit forced fallback opening')
+delivery.fallbackButton.scripts.OnClick(nil,'LeftButton')
+assert(reader:IsShown() and reader.pane.bar:GetValue()==60,'fallback reread lost interrupted scroll')
+delivery.fallbackButton.scripts.OnClick(nil,'LeftButton');assert(not reader:IsShown())
+delivery.fallbackButton.scripts.OnClick(nil,'RightButton');assert(reader:IsShown() and #admission:History()==6)
+assert(waypoints==fallbackNavigation,'fallback story changed navigation')
+ZGV.Parchment:CloseBackground()
+print('PASS original-interface fallback: existing movable reader, visible-only history, close/recall/combat/scroll retention and navigation continuity')
