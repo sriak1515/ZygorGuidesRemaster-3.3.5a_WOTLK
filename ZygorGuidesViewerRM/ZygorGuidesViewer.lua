@@ -4428,6 +4428,10 @@ function me:FocusStep(num,quiet)
 	end
 	self.CurrentStep = self.CurrentGuide["steps"][num]
 
+	if self.CampaignNarration then
+		pcall(self.CampaignNarration.OnStepFocused,self.CampaignNarration,self.CurrentGuide,self.CurrentStep)
+	end
+
 	self:ClearRecentActivities()
 
 	-- Abort any pending LibRover pathfinding from previous step
@@ -4598,6 +4602,10 @@ function me:TryToCompleteStep(force)
 	--local updated
 
 	local stepcomplete,steppossible,stepmanual = self.CurrentStep:IsComplete()
+
+	if self.CampaignNarration then
+		pcall(self.CampaignNarration.OnStepCompleted,self.CampaignNarration,self.CurrentGuide,self.CurrentStep,stepcomplete)
+	end
 
 	local completing = stepcomplete
 
