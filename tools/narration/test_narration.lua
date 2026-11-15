@@ -61,7 +61,7 @@ UnitCastingInfo=function() return nil end
 UnitChannelInfo=function() return nil end
 
 local function newWidget(kind)
-	local widget={shown=false,scripts={},text=''}
+	local widget={kind=kind,shown=false,scripts={},text='',width=0,height=0}
 	function widget:Show() self.shown=true end
 	function widget:Hide() self.shown=false end
 	function widget:IsShown() return self.shown end
@@ -73,14 +73,36 @@ local function newWidget(kind)
 	function widget:CreateFontString() local child=newWidget('FontString'); child:Show(); return child end
 	function widget:CreateTexture() local child=newWidget('Texture'); child:Show(); return child end
 	function widget:GetAlpha() return 1 end
-	function widget:SetScrollChild(child) self.scrollChild=child end
+	function widget:SetWidth(value) self.width=value end
+	function widget:GetWidth() return self.width or 0 end
+	function widget:SetHeight(value) self.height=value end
+	function widget:GetHeight() return self.height or 0 end
+	function widget:SetScrollChild(child)
+		if type(child)~='table' or child.kind~='Frame' then
+			error('SetScrollChild requires a Frame')
+		end
+		self.scrollChild=child
+	end
 	function widget:GetScrollChild() return self.scrollChild end
 	function widget:GetVerticalScroll() return self.verticalScroll or 0 end
 	function widget:SetVerticalScroll(value) self.verticalScroll=value end
 	function widget:GetVerticalScrollRange()
+		local viewport=self:GetHeight()
+		if viewport<=0 then viewport=166 end
 		local child=self.scrollChild
-		if child and type(child.text)=='string' and #child.text>400 then return #child.text-400 end
+		if type(child)=='table' and child.GetHeight then
+			local childHeight=child:GetHeight()
+			if childHeight>viewport then return childHeight-viewport end
+		end
 		return 0
+	end
+	function widget:GetStringHeight()
+		if self.kind~='FontString' then return self:GetHeight() end
+		local width=self:GetWidth()
+		if width<=0 then width=388 end
+		local charsPerLine=math.max(1,math.floor(width/7))
+		local lines=math.max(1,math.ceil(#(self.text or '')/charsPerLine))
+		return lines*16
 	end
 	function widget:UpdateScrollChildRect() end
 	function widget:EnableMouseWheel(value) self.mouseWheel=value end
@@ -500,6 +522,12 @@ local retried=N:OpenLatest()
 check(retried and retried.id=='balance-first-duty','reader retry did not present pending narration')
 equal(status().pending,0,'reader retry left narration pending')
 equal(status().delivered,1,'reader retry did not record delivery')
+local retryScroll
+for index=#createdFrames,1,-1 do
+	if type(createdFrames[index].scrollChild)=='table' then retryScroll=createdFrames[index]; break end
+end
+check(retryScroll and retryScroll.scrollChild.kind=='Frame','reader retry did not create a Frame scroll child')
+local shortChildHeight=retryScroll.scrollChild:GetHeight()
 N:Close()
 
 -- 13. Long passages use a bounded scroll viewport and respond to mouse wheel.
@@ -527,6 +555,14 @@ for index=#createdFrames,1,-1 do
 	if type(createdFrames[index].scrollChild)=='table' then scroll=createdFrames[index]; break end
 end
 check(scroll,'reader did not create a scroll viewport')
+local child=scroll.scrollChild
+check(child and child.kind=='Frame','scroll child is not a Frame')
+check(child.body and child.body.kind=='FontString','scroll FontString is not inside the child Frame')
+local badChild=newWidget('FontString')
+local accepted=pcall(function() scroll:SetScrollChild(badChild) end)
+check(not accepted,'mock accepted a non-Frame SetScrollChild')
+check(scroll.scrollChild==child,'failed contract check replaced the valid scroll child')
+check(child:GetHeight()>shortChildHeight,'long passage did not grow the scroll child')
 check(scroll:GetVerticalScrollRange()>0,'long passage did not create scrollable overflow')
 scroll.scripts.OnMouseWheel(scroll,-1)
 check(scroll:GetVerticalScroll()>0,'mouse wheel did not scroll the reader body')

@@ -549,21 +549,43 @@ local function ensureUI()
 			if offset>range then offset=range end
 			if self.SetVerticalScroll then self:SetVerticalScroll(offset) end
 		end)
-		local body=scroll:CreateFontString(nil,'ARTWORK')
+		local child=makeWidget('Frame',scroll)
+		if not child then error('scroll child') end
+		child:SetWidth(388)
+		child:SetHeight(1)
+		scroll:SetScrollChild(child)
+		local body=child:CreateFontString(nil,'ARTWORK')
 		if not body then error('body') end
 		body:SetFont(fontPath(),12)
-		body:SetPoint('TOPLEFT',scroll,'TOPLEFT',0,0)
+		body:SetPoint('TOPLEFT',child,'TOPLEFT',0,0)
 		body:SetWidth(388)
 		body:SetJustifyH('LEFT')
 		body:SetJustifyV('TOP')
 		if body.SetSpacing then body:SetSpacing(2) end
-		scroll:SetScrollChild(body)
+		child.body=body
+		local function updateScrollChild()
+			local width=scroll.GetWidth and scroll:GetWidth() or 0
+			if not width or width<=0 then width=388 end
+			local viewport=scroll.GetHeight and scroll:GetHeight() or 0
+			if not viewport or viewport<=0 then viewport=166 end
+			child:SetWidth(width)
+			body:SetWidth(width)
+			local height=0
+			if body.GetStringHeight then height=body:GetStringHeight() or 0 end
+			if height<=0 and body.GetHeight then height=body:GetHeight() or 0 end
+			if height<viewport then height=viewport end
+			if height<1 then height=1 end
+			child:SetHeight(height)
+			if scroll.UpdateScrollChildRect then scroll:UpdateScrollChildRect() end
+		end
 		local close=addButton(reader,'Close',16,-228,60,function() N:Close() end)
 		local earlier=addButton(reader,'Earlier',242,-228,70,function() N:Cycle(-1) end)
 		local later=addButton(reader,'Later',318,-228,70,function() N:Cycle(1) end)
 		reader.title=title
 		reader.scroll=scroll
+		reader.scrollChild=child
 		reader.body=body
+		reader.updateScrollChild=updateScrollChild
 		reader.close=close
 		reader.earlier=earlier
 		reader.later=later
@@ -585,11 +607,12 @@ local function showReader(entry,record)
 	local ok=pcall(function()
 		if reader.title then reader.title:SetText(entry.title or 'Story') end
 		if reader.body then reader.body:SetText(entry.text or '') end
+		reader:Show()
+		if reader.updateScrollChild then reader.updateScrollChild() end
 		if reader.scroll then
 			if reader.scroll.SetVerticalScroll then reader.scroll:SetVerticalScroll(0) end
 			if reader.scroll.UpdateScrollChildRect then reader.scroll:UpdateScrollChildRect() end
 		end
-		reader:Show()
 	end)
 	if not ok then return false end
 	if reader.IsShown and not reader:IsShown() then return false end
