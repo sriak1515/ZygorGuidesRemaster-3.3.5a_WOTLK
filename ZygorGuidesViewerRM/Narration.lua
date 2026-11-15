@@ -266,6 +266,22 @@ local function ensureCharacter()
 	return char
 end
 
+local function repairState(state)
+	if type(state.anchors)~='table' then state.anchors={} end
+	if type(state.pending)~='table' then state.pending={} end
+	if type(state.delivered)~='table' then state.delivered={} end
+	for key,value in pairs(state.anchors) do
+		if type(key)~='string' or value~=true then state.anchors[key]=nil end
+	end
+	for id,revision in pairs(state.pending) do
+		if type(id)~='string' or type(revision)~='string' then state.pending[id]=nil end
+	end
+	for id,revision in pairs(state.delivered) do
+		if type(id)~='string' or type(revision)~='string' then state.delivered[id]=nil end
+	end
+	return state
+end
+
 local function stateFor(record,create)
 	local char=ensureCharacter()
 	if not char then return nil end
@@ -286,17 +302,13 @@ local function stateFor(record,create)
 		state={anchors={},pending={},delivered={}}
 		root.guides[record.guide_id]=state
 	end
-	if type(state.anchors)~='table' or type(state.pending)~='table' or type(state.delivered)~='table' then
-		if not create then return nil end
-		state.anchors,state.pending,state.delivered={},{},{}
-	end
-	return state
+	return repairState(state)
 end
 
 local function call(fn,...)
 	if type(fn)~='function' then return nil end
-	local ok,value=pcall(fn,...)
-	if ok then return value end
+	local ok,first,second,third=pcall(fn,...)
+	if ok then return first,second,third end
 	return nil
 end
 
@@ -524,13 +536,33 @@ local function ensureUI()
 		end
 		local title=addText(reader,14,-14)
 		title:SetJustifyH('LEFT')
-		local body=addText(reader,12,-42)
+		local scroll=makeWidget('ScrollFrame',reader)
+		if not scroll then error('scroll') end
+		scroll:SetPoint('TOPLEFT',reader,'TOPLEFT',16,-42)
+		scroll:SetPoint('BOTTOMRIGHT',reader,'BOTTOMRIGHT',-16,52)
+		scroll:EnableMouseWheel(true)
+		scroll:SetScript('OnMouseWheel',function(self,delta)
+			local range=self.GetVerticalScrollRange and self:GetVerticalScrollRange() or 0
+			local offset=self.GetVerticalScroll and self:GetVerticalScroll() or 0
+			offset=offset-(delta or 0)*40
+			if offset<0 then offset=0 end
+			if offset>range then offset=range end
+			if self.SetVerticalScroll then self:SetVerticalScroll(offset) end
+		end)
+		local body=scroll:CreateFontString(nil,'ARTWORK')
+		if not body then error('body') end
+		body:SetFont(fontPath(),12)
+		body:SetPoint('TOPLEFT',scroll,'TOPLEFT',0,0)
+		body:SetWidth(388)
+		body:SetJustifyH('LEFT')
 		body:SetJustifyV('TOP')
 		if body.SetSpacing then body:SetSpacing(2) end
+		scroll:SetScrollChild(body)
 		local close=addButton(reader,'Close',16,-228,60,function() N:Close() end)
 		local earlier=addButton(reader,'Earlier',242,-228,70,function() N:Cycle(-1) end)
 		local later=addButton(reader,'Later',318,-228,70,function() N:Cycle(1) end)
 		reader.title=title
+		reader.scroll=scroll
 		reader.body=body
 		reader.close=close
 		reader.earlier=earlier
@@ -548,14 +580,20 @@ end
 
 local function showReader(entry,record)
 	local widgets=ensureUI()
-	readerEntry,readerRecord=entry,record
-	if not widgets then return true end
+	if not widgets then return false end
 	local reader=widgets.reader
-	if reader.title then reader.title:SetText(entry.title or 'Story') end
-	if reader.body then
-		reader.body:SetText(entry.text or '')
-	end
-	reader:Show()
+	local ok=pcall(function()
+		if reader.title then reader.title:SetText(entry.title or 'Story') end
+		if reader.body then reader.body:SetText(entry.text or '') end
+		if reader.scroll then
+			if reader.scroll.SetVerticalScroll then reader.scroll:SetVerticalScroll(0) end
+			if reader.scroll.UpdateScrollChildRect then reader.scroll:UpdateScrollChildRect() end
+		end
+		reader:Show()
+	end)
+	if not ok then return false end
+	if reader.IsShown and not reader:IsShown() then return false end
+	readerEntry,readerRecord=entry,record
 	return true
 end
 
@@ -715,8 +753,8 @@ function N:Present(entry)
 	if not record then return false end
 	local state=stateFor(record,true)
 	if not state then return false end
+	if not showReader(entry,record) then return false end
 	markPresented(entry,record,state)
-	showReader(entry,record)
 	self:RefreshCue()
 	return true
 end
@@ -727,8 +765,8 @@ function N:OpenLatest(registration)
 	local state=stateFor(record,false)
 	if not state then return nil end
 	local entry=firstPending(record,state) or latestDelivered(record,state)
-	if entry then self:Present(entry) end
-	return entry
+	if entry and self:Present(entry) then return entry end
+	return nil
 end
 
 function N:OpenHistory(registration)
@@ -737,8 +775,8 @@ function N:OpenHistory(registration)
 	local state=stateFor(record,false)
 	if not state then return nil end
 	local entry=latestDelivered(record,state) or firstPending(record,state)
-	if entry then self:Present(entry) end
-	return entry
+	if entry and self:Present(entry) then return entry end
+	return nil
 end
 
 function N:Cycle(delta)
@@ -755,8 +793,8 @@ function N:Cycle(delta)
 	if index<1 then index=#list end
 	if index>#list then index=1 end
 	local entry=entryFor(readerRecord,list[index])
-	self:Present(entry)
-	return entry
+	if self:Present(entry) then return entry end
+	return nil
 end
 
 function N:Close()
@@ -773,6 +811,14 @@ function N:GetAutoOpen() return autoOpen end
 function N:Evaluate(condition)
 	if condition~=nil and type(condition)~='table' then return nil end
 	return evaluate(condition)
+end
+
+function N:ReportHookFailure(kind,err)
+	if not ZGV.Debug then return end
+	local now=(type(GetTime)=='function' and GetTime()) or 0
+	if self._lastHookFailure and now-self._lastHookFailure<30 then return end
+	self._lastHookFailure=now
+	ZGV:Debug('Narration '..tostring(kind)..' hook failed: '..tostring(err))
 end
 
 function ZGV:RegisterCampaignGuideMetadata(metadata)

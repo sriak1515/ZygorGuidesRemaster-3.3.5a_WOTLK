@@ -73,13 +73,29 @@ local function newWidget(kind)
 	function widget:CreateFontString() local child=newWidget('FontString'); child:Show(); return child end
 	function widget:CreateTexture() local child=newWidget('Texture'); child:Show(); return child end
 	function widget:GetAlpha() return 1 end
+	function widget:SetScrollChild(child) self.scrollChild=child end
+	function widget:GetScrollChild() return self.scrollChild end
+	function widget:GetVerticalScroll() return self.verticalScroll or 0 end
+	function widget:SetVerticalScroll(value) self.verticalScroll=value end
+	function widget:GetVerticalScrollRange()
+		local child=self.scrollChild
+		if child and type(child.text)=='string' and #child.text>400 then return #child.text-400 end
+		return 0
+	end
+	function widget:UpdateScrollChildRect() end
+	function widget:EnableMouseWheel(value) self.mouseWheel=value end
 	return setmetatable(widget,{__index=function() return function() end end})
 end
 UIParent=newWidget('Frame')
 UIParent:Show()
 STANDARD_TEXT_FONT='Fonts\\FRIZQT__.TTF'
 GameFontNormal={GetFont=function() return STANDARD_TEXT_FONT end}
-CreateFrame=function(kind) return newWidget(kind) end
+local createdFrames={}
+CreateFrame=function(kind)
+	local frame=newWidget(kind)
+	createdFrames[#createdFrames+1]=frame
+	return frame
+end
 
 ZygorGuidesViewer={
 	BZL={},BSZL={},BFL={},StandingNamesEngRev={},dailyQuests={},instantQuests={},
@@ -226,6 +242,33 @@ N:OnObservations()
 equal(status().pending,1,'newly true retained anchor was not delivered')
 check(N:GetPendingEntry().id=='balance-first-duty-complete','wrong moment passage')
 
+-- 4b. Class and race predicates preserve the client API's second return value.
+local savedClass,savedRace=UnitClass,UnitRace
+UnitClass=function() return 'Druid','DRUID' end
+UnitRace=function() return 'Night Elf','NightElf' end
+equal(N:Evaluate({class_is='Druid'}),true,'matching class was not true')
+equal(N:Evaluate({class_is='Mage'}),false,'nonmatching class was not false')
+equal(N:Evaluate({race_is='NightElf'}),true,'matching race was not true')
+equal(N:Evaluate({race_is='Human'}),false,'nonmatching race was not false')
+local nestedTrue={
+	all={
+		{class_is='Druid'},
+		{any={
+			{race_is='NightElf'},
+			{level_at_least={actor='leader',level=80}},
+		}},
+	},
+}
+equal(N:Evaluate(nestedTrue),true,'nested class/race predicate was not true')
+equal(N:Evaluate({all={{class_is='Druid'},{race_is='Human'}}}),false,'nested nonmatching predicate was not false')
+UnitClass=nil
+equal(N:Evaluate({class_is='Druid'}),nil,'unavailable class observation was not UNKNOWN')
+UnitClass=savedClass
+UnitRace=nil
+equal(N:Evaluate({race_is='NightElf'}),nil,'unavailable race observation was not UNKNOWN')
+equal(N:Evaluate({all={{class_is='Druid'},{race_is='NightElf'}}}),nil,'nested unavailable observation was not UNKNOWN')
+UnitRace=savedRace
+
 -- 5. Reload recovery: anchors and pending/delivered state survive a fresh module
 -- and a fresh metadata registration without replaying the guide.
 guide=reloadPackage()
@@ -239,9 +282,32 @@ local history=N:OpenHistory()
 check(history and history.id=='balance-first-duty','presented passage unavailable after reload')
 N:Close()
 
+-- 5b. A malformed pending subtable must not wipe intact anchors/delivered state.
+local knownRevision
+for _,entry in ipairs(N:GetEntries()) do
+	if entry.id=='balance-first-duty' then knownRevision=entry.revision end
+end
+check(knownRevision,'fixture delivered revision missing')
+local savedChar=ZGV.db.char
+local charCorrupt={permaCompletedDailies={}}
+charCorrupt.campaignNarration={version=1,guides={
+	['EXAMPLE-KAL-01-BALANCE-ONE']={
+		anchors={['KAL-01/accept-balance-one']=true},
+		pending='corrupt',
+		delivered={['balance-first-duty']=knownRevision},
+	},
+}}
+ZGV.db.char=charCorrupt
+N:OnObservations()
+local repaired=N:GetStatus('WoW Solo Adventure V1\\EXAMPLE-KAL-01-BALANCE-ONE')
+equal(repaired.anchors,1,'corrupt pending discarded valid anchors')
+equal(repaired.delivered,1,'corrupt pending discarded valid delivered state')
+equal(repaired.pending,0,'corrupt pending was not repaired')
+ZGV.db.char=savedChar
+
 -- 6. Character separation: a second character does not inherit the first
 -- character's anchors or pending text.
-local charA=ZGV.db.char
+local charA=savedChar
 local charB={permaCompletedDailies={}}
 ZGV.db.char=charB
 N:OnStepFocused(guide,guide.steps[1])
@@ -365,4 +431,105 @@ equal(ZGV.skipped,1,'ordinary native advancement did not run')
 equal(N:GetStatus('WoW Solo Adventure V1\\EXAMPLE-KAL-01-BALANCE-ONE').anchors,1,'viewer lifecycle did not record narration anchor')
 equal(N:GetStatus('WoW Solo Adventure V1\\EXAMPLE-KAL-01-BALANCE-ONE').pending,1,'viewer lifecycle lost narration')
 
-print('PASS: narration metadata, conditions, recovery, combat, separation and viewer lifecycle')
+-- 11. A narration hook fault is debug-only and cannot abort native advancement.
+local debugMessages={}
+function ZGV:Debug(message) debugMessages[#debugMessages+1]=message end
+local goodHook=N.OnStepCompleted
+N.OnStepCompleted=function() error('synthetic narration hook fault') end
+ZGV.db.char=charC
+ZGV.CurrentGuide=guide
+ZGV.CurrentGuideName='WoW Solo Adventure V1\\EXAMPLE-KAL-01-BALANCE-ONE'
+ZGV.CurrentStep=acceptStep
+ZGV.CurrentStepNum=1
+ZGV.completionelapsed=999
+ZGV.skipped=0
+ZGV:TryToCompleteStep(true)
+equal(ZGV.skipped,1,'narration hook fault aborted native advancement')
+local diagnosed=false
+for _,message in ipairs(debugMessages) do
+	if message:find('completion hook failed',1,true) then diagnosed=true end
+end
+check(diagnosed,'narration hook fault was not diagnosed in debug')
+N.OnStepCompleted=goodHook
+
+-- 11b. Native completion still runs when the narration module is unavailable.
+ZGV.CurrentStep=acceptStep
+ZGV.CurrentStepNum=1
+ZGV.completionelapsed=999
+ZGV.skipped=0
+local savedNarration=ZGV.CampaignNarration
+ZGV.CampaignNarration=nil
+ZGV:TryToCompleteStep(true)
+equal(ZGV.skipped,1,'missing narration module blocked native advancement')
+ZGV.CampaignNarration=savedNarration
+
+-- 12. Failed reader creation must leave pending narration recoverable; a later
+-- successful UI build presents it and only then records delivery.
+local savedCreateFrame=CreateFrame
+local charFail={permaCompletedDailies={}}
+ZGV.db.char=charFail
+CreateFrame=nil
+ZGV.CampaignNarration=nil
+assert(loadfile(root..'/Narration.lua'))()
+N=assert(ZGV.CampaignNarration)
+local failMetadata={}
+assert(loadfile(fixture..'/Metadata.lua'))('Test',failMetadata)
+equal(failMetadata.metadata_accepted,true,'metadata not accepted during reader failure test')
+ZGV.CurrentGuide=guide
+ZGV.CurrentGuideName='WoW Solo Adventure V1\\EXAMPLE-KAL-01-BALANCE-ONE'
+ZGV.questsbyid={[456]={index=1,complete=false,goals={{num=0,needed=7},{num=0,needed=4}}}}
+ZGV.questLogInitialized=true
+N:OnStepFocused(guide,acceptStep)
+N:OnStepCompleted(guide,acceptStep,true)
+equal(status().pending,1,'reader failure lost pending narration')
+equal(N:OpenLatest(),nil,'reader failure reported successful presentation')
+equal(status().pending,1,'reader failure consumed pending narration')
+equal(status().delivered,0,'reader failure marked narration delivered')
+
+CreateFrame=savedCreateFrame
+ZGV.CampaignNarration=nil
+assert(loadfile(root..'/Narration.lua'))()
+N=assert(ZGV.CampaignNarration)
+local retryMetadata={}
+assert(loadfile(fixture..'/Metadata.lua'))('Test',retryMetadata)
+equal(retryMetadata.metadata_accepted,true,'metadata not accepted during reader retry')
+ZGV.CurrentGuide=guide
+ZGV.CurrentGuideName='WoW Solo Adventure V1\\EXAMPLE-KAL-01-BALANCE-ONE'
+N:OnStepFocused(guide,acceptStep)
+local retried=N:OpenLatest()
+check(retried and retried.id=='balance-first-duty','reader retry did not present pending narration')
+equal(status().pending,0,'reader retry left narration pending')
+equal(status().delivered,1,'reader retry did not record delivery')
+N:Close()
+
+-- 13. Long passages use a bounded scroll viewport and respond to mouse wheel.
+local longText=string.rep('Long narration line for viewport verification. ',60)
+local longRegistration='Test Long\\NARRATION'
+local longMetadata={
+	interface_version=1,source_format_version=1,
+	guide={id='TEST-LONG',title='Long narration'},
+	native_views={{registration=longRegistration,payload_sha256=string.rep('c',64),
+		steps={{source_step_id='long/step',source_path='/steps/0',native_parts={'long-step'}}},goals={}}},
+	narration={{id='long-passage',type='context',at_step='long/step',text=longText,revision=string.rep('d',64)}},
+	source_locations={},
+}
+equal(ZGV:RegisterCampaignGuideMetadata(longMetadata),true,'long-passage metadata was rejected')
+local longGuide={title=longRegistration,steps={}}
+ZGV.CurrentGuide=longGuide
+ZGV.CurrentGuideName=longRegistration
+local longStep={label='long-step',goals={},AreRequirementsMet=function() return true end}
+N:OnStepFocused(longGuide,longStep)
+N:OnStepCompleted(longGuide,longStep,true)
+local longEntry=N:OpenLatest()
+check(longEntry and longEntry.id=='long-passage','long passage did not open')
+local scroll
+for index=#createdFrames,1,-1 do
+	if type(createdFrames[index].scrollChild)=='table' then scroll=createdFrames[index]; break end
+end
+check(scroll,'reader did not create a scroll viewport')
+check(scroll:GetVerticalScrollRange()>0,'long passage did not create scrollable overflow')
+scroll.scripts.OnMouseWheel(scroll,-1)
+check(scroll:GetVerticalScroll()>0,'mouse wheel did not scroll the reader body')
+N:Close()
+
+print('PASS: narration metadata, conditions, recovery, combat, separation, scrolling and viewer lifecycle')

@@ -4429,7 +4429,10 @@ function me:FocusStep(num,quiet)
 	self.CurrentStep = self.CurrentGuide["steps"][num]
 
 	if self.CampaignNarration then
-		pcall(self.CampaignNarration.OnStepFocused,self.CampaignNarration,self.CurrentGuide,self.CurrentStep)
+		local ok,err=pcall(self.CampaignNarration.OnStepFocused,self.CampaignNarration,self.CurrentGuide,self.CurrentStep)
+		if not ok and self.CampaignNarration.ReportHookFailure then
+			pcall(self.CampaignNarration.ReportHookFailure,self.CampaignNarration,'focus',err)
+		end
 	end
 
 	self:ClearRecentActivities()
@@ -4604,7 +4607,10 @@ function me:TryToCompleteStep(force)
 	local stepcomplete,steppossible,stepmanual = self.CurrentStep:IsComplete()
 
 	if self.CampaignNarration then
-		pcall(self.CampaignNarration.OnStepCompleted,self.CampaignNarration,self.CurrentGuide,self.CurrentStep,stepcomplete)
+		local ok,err=pcall(self.CampaignNarration.OnStepCompleted,self.CampaignNarration,self.CurrentGuide,self.CurrentStep,stepcomplete)
+		if not ok and self.CampaignNarration.ReportHookFailure then
+			pcall(self.CampaignNarration.ReportHookFailure,self.CampaignNarration,'completion',err)
+		end
 	end
 
 	local completing = stepcomplete

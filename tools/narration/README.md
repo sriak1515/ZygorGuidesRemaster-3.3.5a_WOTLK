@@ -14,9 +14,11 @@ It also extracts and runs the actual `TryToCompleteStep` from
 narration anchor.
 
 Coverage: metadata acceptance/rejection/missing consumer, anchor association,
-tri-state reveal conditions, rapid advancement, combat deferral, once-only
-delivery and history reopening, reload recovery, guide switching, character
-separation, and native registration when narration is unavailable.
+tri-state reveal conditions including class/race API returns, rapid advancement,
+combat deferral, once-only delivery and history reopening, reload recovery,
+corrupt-state repair, failed-reader recovery, long-passage scrolling, hook-fault
+isolation, guide switching, character separation, and native registration when
+narration is unavailable.
 
 These are Lua 5.1/Lua-harness checks only. They do not establish real 3.3.5a
 frame rendering, addon load order, or client behavior.
