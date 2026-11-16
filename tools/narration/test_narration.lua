@@ -368,12 +368,19 @@ ZGV.db.char=charA
 N:OnStepFocused(guide,guide.steps[3])
 equal(status().pending,1,'first character lost its pending narration')
 
--- 7. Combat-safe deferred presentation. Auto-open is opt-in; combat suppresses
--- it but keeps the passage pending until the real regen event.
+-- 7. Auto-open waits for combat and travel, then retries pending passages.
 ZGV.db.char=charB
 ZGV.questsbyid={[456]={index=1,complete=false,goals={{num=0,needed=7},{num=0,needed=4}}}}
 ZGV.questLogInitialized=true
-N:SetAutoOpen(true)
+ZGV.AddEvent=function() end
+ZGV.startups[#ZGV.startups](ZGV)
+check(N:GetAutoOpen(),'startup did not enable auto-open')
+UnitOnTaxi=function() return true end
+GetUnitSpeed=function() return 7 end
+check(not N:CanAutoPresent({type='moment'}),'taxi allowed auto-open')
+UnitOnTaxi=function() return false end
+check(not N:CanAutoPresent({type='chapter'}),'moving allowed chapter auto-open')
+check(N:CanAutoPresent({type='moment'}),'moving blocked short passage')
 InCombatLockdown=function() return true end
 completeStep(acceptStep)
 equal(status().pending,1,'combat completion discarded narration')
@@ -383,6 +390,20 @@ N:OnCombatEnded()
 equal(N:IsReaderShown(),true,'post-combat presentation did not resume')
 equal(status().pending,0,'post-combat presentation did not deliver')
 equal(status().delivered,1,'post-combat delivery was not recorded')
+N:Close()
+ZGV.db.char={permaCompletedDailies={}}
+UnitOnTaxi=function() return true end
+completeStep(acceptStep)
+equal(status().pending,1,'taxi discarded narration')
+equal(N:IsReaderShown(),false,'taxi opened the reader')
+UnitOnTaxi=function() return false end
+local cue
+for _,frame in ipairs(createdFrames) do
+	if type(frame.label)=='table' and frame.label:GetText():match('^Story') and frame.scripts.OnUpdate then cue=frame end
+end
+assert(cue,'story cue retry missing')
+cue.scripts.OnUpdate(cue,1)
+equal(N:IsReaderShown(),true,'travel retry did not open pending narration')
 N:Close()
 N:SetAutoOpen(false)
 
