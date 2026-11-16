@@ -454,35 +454,98 @@ local function fontPath()
 	return font or STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF'
 end
 
+local function readerFontSize()
+	local char=ZGV.db and ZGV.db.char
+	local size=char and char.campaignNarrationFontSize
+	return isInteger(size,18) and size>=14 and size or 16
+end
+
+local function applyReaderFont(reader)
+	reader.body:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF',readerFontSize())
+	if reader.updateScrollChild then reader.updateScrollChild() end
+	local scroll=reader.scroll
+	if scroll then
+		scroll:SetVerticalScroll(math.min(scroll:GetVerticalScroll(),scroll:GetVerticalScrollRange()))
+	end
+end
+
 local function addText(parent,size,y)
 	local text=parent:CreateFontString(nil,'ARTWORK')
 	if not text then return nil end
-	text:SetFont(fontPath(),size or 12)
+	text:SetFont('Fonts\\MORPHEUS.TTF',size or 20)
+	text:SetTextColor(90/255,43/255,11/255)
+	text:SetShadowOffset(0,0)
 	text:SetPoint('TOPLEFT',parent,'TOPLEFT',16,y or -16)
-	text:SetPoint('TOPRIGHT',parent,'TOPRIGHT',-16,y or -16)
+	text:SetPoint('TOPRIGHT',parent,'TOPRIGHT',-48,y or -16)
 	text:SetJustifyH('LEFT')
 	return text
 end
 
-local function addButton(parent,label,x,y,width,callback)
+local function addButton(parent,label,callback)
 	local button=makeWidget('Button',parent)
 	if not button then return nil end
-	button:SetSize(width or 70,20)
-	button:SetPoint('TOPLEFT',parent,'TOPLEFT',x,y)
-	if button.SetBackdrop then
-		button:SetBackdrop({bgFile='Interface\\Buttons\\white8x8',edgeFile='Interface\\Buttons\\white8x8',tile=true,tileSize=8,edgeSize=1,insets={left=1,right=1,top=1,bottom=1}})
-		button:SetBackdropColor(0.12,0.12,0.14,0.95)
-		button:SetBackdropBorderColor(0.45,0.38,0.22,1)
-	end
+	button:SetSize(24,24)
 	local text=button:CreateFontString(nil,'ARTWORK')
-	if text then
-		text:SetFont(fontPath(),12)
-		text:SetPoint('CENTER',button,'CENTER',0,0)
-		text:SetText(label)
-		button.label=text
-	end
+	text:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF',20)
+	text:SetTextColor(90/255,43/255,11/255)
+	text:SetShadowOffset(0,0)
+	text:SetPoint('CENTER',button,'CENTER',0,0)
+	text:SetText(label)
+	button.label=text
+	button:SetScript('OnEnter',function(self)
+		if self:IsEnabled() then text:SetTextColor(44/255,31/255,16/255) end
+	end)
+	button:SetScript('OnLeave',function() text:SetTextColor(90/255,43/255,11/255) end)
 	button:SetScript('OnClick',function() callback() end)
 	return button
+end
+
+-- Geometry is separate from narration delivery state and uses the existing
+-- per-character SavedVariables store. All offsets are in UIParent units.
+local function saveReaderGeometry(reader)
+	local char=ZGV.db and ZGV.db.char
+	local x,y=reader:GetCenter()
+	local px,py=UIParent:GetCenter()
+	if not char or not x or not y or not px or not py then return end
+	char.campaignNarrationReader={x=x-px,y=y-py,width=reader:GetWidth(),height=reader:GetHeight()}
+end
+
+local function restoreReaderGeometry(reader)
+	local char=ZGV.db and ZGV.db.char
+	local saved=char and char.campaignNarrationReader
+	reader:ClearAllPoints()
+	reader:SetPoint('CENTER',UIParent,'CENTER',0,60)
+	reader:SetSize(520,340)
+	if type(saved)~='table' then return end
+	for _,key in ipairs({'x','y','width','height'}) do
+		local value=saved[key]
+		if type(value)~='number' or value~=value or value==huge or value==-huge then return end
+	end
+	reader:SetSize(math.max(360,math.min(1000,saved.width)),math.max(240,math.min(900,saved.height)))
+	reader:ClearAllPoints()
+	reader:SetPoint('CENTER',UIParent,'CENTER',saved.x,saved.y)
+end
+
+-- Layered straight strips provide a soft shade without decorative textures.
+local function shadeEdges(parent,outside)
+	for i=1,4 do
+		local inset=outside and -i or i
+		for _,edge in ipairs({'TOP','BOTTOM','LEFT','RIGHT'}) do
+			local texture=parent:CreateTexture(nil,outside and 'BACKGROUND' or 'BORDER')
+			texture:SetTexture(44/255,31/255,16/255,(5-i)*(outside and 0.018 or 0.025))
+			if edge=='TOP' or edge=='BOTTOM' then
+				local y=edge=='TOP' and -inset or inset
+				texture:SetPoint(edge..'LEFT',parent,edge..'LEFT',inset+(outside and 2 or 0),y-(outside and 2 or 0))
+				texture:SetPoint(edge..'RIGHT',parent,edge..'RIGHT',-inset+(outside and 2 or 0),y-(outside and 2 or 0))
+				texture:SetHeight(1)
+			else
+				local x=edge=='LEFT' and inset or -inset
+				texture:SetPoint('TOP'..edge,parent,'TOP'..edge,x+(outside and 2 or 0),-inset-(outside and 2 or 0))
+				texture:SetPoint('BOTTOM'..edge,parent,'BOTTOM'..edge,x+(outside and 2 or 0),inset-(outside and 2 or 0))
+				texture:SetWidth(1)
+			end
+		end
+	end
 end
 
 local function ensureUI()
@@ -520,26 +583,48 @@ local function ensureUI()
 
 		local reader=makeWidget('Frame',UIParent)
 		if not reader then error('reader') end
-		reader:SetSize(420,260)
+		reader:SetSize(520,340)
 		reader:SetPoint('CENTER',UIParent,'CENTER',0,60)
 		reader:SetFrameStrata('DIALOG')
 		reader:SetMovable(true)
+		reader:SetResizable(true)
+		reader:SetMinResize(360,240)
+		reader:SetMaxResize(1000,900)
 		reader:EnableMouse(true)
 		reader:SetClampedToScreen(true)
 		reader:RegisterForDrag('LeftButton')
 		reader:SetScript('OnDragStart',function(self) self:StartMoving() end)
-		reader:SetScript('OnDragStop',function(self) self:StopMovingOrSizing() end)
+		reader:SetScript('OnDragStop',function(self)
+			self:StopMovingOrSizing()
+			saveReaderGeometry(self)
+		end)
+		reader:SetScript('OnShow',function(self)
+			self:SetAlpha(0)
+			local elapsed=0
+			self:SetScript('OnUpdate',function(frame,delta)
+				elapsed=elapsed+delta
+				frame:SetAlpha(math.min(1,elapsed/0.3))
+				if elapsed>=0.3 then frame:SetScript('OnUpdate',nil) end
+			end)
+		end)
+		reader:SetScript('OnHide',function(self)
+			self:StopMovingOrSizing()
+			self:SetScript('OnUpdate',nil)
+			self:SetAlpha(1)
+		end)
 		if reader.SetBackdrop then
-			reader:SetBackdrop({bgFile='Interface\\Tooltips\\UI-Tooltip-Background',edgeFile='Interface\\Tooltips\\UI-Tooltip-Border',tile=true,tileSize=16,edgeSize=12,insets={left=4,right=4,top=4,bottom=4}})
-			reader:SetBackdropColor(0.02,0.03,0.05,0.94)
-			reader:SetBackdropBorderColor(0.52,0.42,0.22,1)
+			reader:SetBackdrop({bgFile='Interface\\Buttons\\white8x8',edgeFile='Interface\\Buttons\\white8x8',edgeSize=1,insets={left=1,right=1,top=1,bottom=1}})
+			reader:SetBackdropColor(210/255,188/255,146/255,1)
+			reader:SetBackdropBorderColor(134/255,104/255,60/255,1)
 		end
-		local title=addText(reader,14,-14)
+		shadeEdges(reader,true)
+		shadeEdges(reader,false)
+		local title=addText(reader,22,-18)
 		title:SetJustifyH('LEFT')
 		local scroll=makeWidget('ScrollFrame',reader)
 		if not scroll then error('scroll') end
-		scroll:SetPoint('TOPLEFT',reader,'TOPLEFT',16,-42)
-		scroll:SetPoint('BOTTOMRIGHT',reader,'BOTTOMRIGHT',-16,52)
+		scroll:SetPoint('TOPLEFT',reader,'TOPLEFT',24,-58)
+		scroll:SetPoint('BOTTOMRIGHT',reader,'BOTTOMRIGHT',-24,56)
 		scroll:EnableMouseWheel(true)
 		scroll:SetScript('OnMouseWheel',function(self,delta)
 			local range=self.GetVerticalScrollRange and self:GetVerticalScrollRange() or 0
@@ -556,12 +641,14 @@ local function ensureUI()
 		scroll:SetScrollChild(child)
 		local body=child:CreateFontString(nil,'ARTWORK')
 		if not body then error('body') end
-		body:SetFont(fontPath(),12)
+		body:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF',16)
+		body:SetTextColor(44/255,31/255,16/255)
+		body:SetShadowOffset(0,0)
 		body:SetPoint('TOPLEFT',child,'TOPLEFT',0,0)
 		body:SetWidth(388)
 		body:SetJustifyH('LEFT')
 		body:SetJustifyV('TOP')
-		if body.SetSpacing then body:SetSpacing(2) end
+		if body.SetSpacing then body:SetSpacing(3) end
 		child.body=body
 		local function updateScrollChild()
 			local width=scroll.GetWidth and scroll:GetWidth() or 0
@@ -578,9 +665,30 @@ local function ensureUI()
 			child:SetHeight(height)
 			if scroll.UpdateScrollChildRect then scroll:UpdateScrollChildRect() end
 		end
-		local close=addButton(reader,'Close',16,-228,60,function() N:Close() end)
-		local earlier=addButton(reader,'Earlier',242,-228,70,function() N:Cycle(-1) end)
-		local later=addButton(reader,'Later',318,-228,70,function() N:Cycle(1) end)
+		scroll:SetScript('OnSizeChanged',updateScrollChild)
+		local close=addButton(reader,'×',function() N:Close() end)
+		close:SetPoint('TOPRIGHT',reader,'TOPRIGHT',-16,-18)
+		local earlier=addButton(reader,'‹',function() N:Cycle(-1) end)
+		local later=addButton(reader,'›',function() N:Cycle(1) end)
+		earlier:SetPoint('BOTTOMRIGHT',reader,'BOTTOMRIGHT',-66,14)
+		later:SetPoint('BOTTOMRIGHT',reader,'BOTTOMRIGHT',-34,14)
+		local grip=makeWidget('Button',reader)
+		grip:SetSize(18,18)
+		grip:SetPoint('BOTTOMRIGHT',reader,'BOTTOMRIGHT',-3,3)
+		local gripText=grip:CreateFontString(nil,'ARTWORK')
+		gripText:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF',16)
+		gripText:SetTextColor(86/255,68/255,44/255)
+		gripText:SetPoint('CENTER',grip,'CENTER',0,0)
+		gripText:SetText('/')
+		grip:SetScript('OnMouseDown',function(_,button)
+			if button=='LeftButton' then reader:StartSizing('BOTTOMRIGHT') end
+		end)
+		grip:SetScript('OnMouseUp',function()
+			reader:StopMovingOrSizing()
+			saveReaderGeometry(reader)
+		end)
+		reader:SetScript('OnSizeChanged',updateScrollChild)
+		reader.grip=grip
 		reader.title=title
 		reader.scroll=scroll
 		reader.scrollChild=child
@@ -607,6 +715,13 @@ local function showReader(entry,record)
 	local ok=pcall(function()
 		if reader.title then reader.title:SetText(entry.title or 'Story') end
 		if reader.body then reader.body:SetText(entry.text or '') end
+		if not reader:IsShown() then restoreReaderGeometry(reader) end
+		for _,button in ipairs({reader.earlier,reader.later}) do
+			if entry.frameTest then button:Disable() else button:Enable() end
+			button:SetAlpha(entry.frameTest and 0.4 or 1)
+			button.label:SetTextColor(90/255,43/255,11/255)
+		end
+		applyReaderFont(reader)
 		reader:Show()
 		if reader.updateScrollChild then reader.updateScrollChild() end
 		if reader.scroll then
@@ -803,6 +918,7 @@ function N:OpenHistory(registration)
 end
 
 function N:Cycle(delta)
+	if readerEntry and readerEntry.frameTest then return nil end
 	if not readerRecord or not readerEntry then return self:OpenLatest() end
 	local state=stateFor(readerRecord,false)
 	if not state then return nil end
@@ -861,4 +977,44 @@ if type(ZGV.startups)=='table' then
 		self:AddEvent('CHAT_MSG_SYSTEM',function() N:OnObservations() end)
 		self:AddEvent('PLAYER_REGEN_ENABLED',function() N:OnCombatEnded() end)
 	end)
+end
+
+-- A visual fixture only: no registration, anchors, pending or delivered writes.
+function N:ShowFrameTest(input)
+	local counts={['40']=40,['100']=100,['150']=150,long=600}
+	local count=counts[type(input)=='string' and input:match('^%s*(%S+)%s*$') or '']
+	if not count then
+		if ZGV.Print then ZGV:Print('Usage: /wsaframe 40|100|150|long (long = 600 words), or /wsaframe font <14-18>') end
+		return false
+	end
+	ensureCharacter()
+	local words={}
+	local sample='This neutral sample tests the reading frame with simple words and varied sentences for a quiet comfortable page of text.'
+	local source={}
+	for word in sample:gmatch('%S+') do source[#source+1]=word end
+	for i=1,count do
+		words[i]=source[(i-1)%#source+1]..(i%100==0 and i<count and '\n\n' or ' ')
+	end
+	return showReader({title='Reader test: '..count..' words',text=table.concat(words),frameTest=true},nil)
+end
+
+function N:HandleFrameCommand(input)
+	local value=(input or ''):match('^%s*font%s+(%d+)%s*$')
+	if value then
+		local size=tonumber(value)
+		if isInteger(size,18) and size>=14 then
+			local char=ensureCharacter()
+			if not char then return false end
+			char.campaignNarrationFontSize=size
+			if type(ui)=='table' then applyReaderFont(ui.reader) end
+			if ZGV.Print then ZGV:Print('Reader body font: '..size) end
+			return true
+		end
+	end
+	return self:ShowFrameTest(input)
+end
+
+if type(SlashCmdList)=='table' then
+	SLASH_WSAFRAME1='/wsaframe'
+	SlashCmdList.WSAFRAME=function(input) N:HandleFrameCommand(input) end
 end

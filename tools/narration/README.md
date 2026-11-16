@@ -22,3 +22,41 @@ and native registration when narration is unavailable.
 
 These are Lua 5.1/Lua-harness checks only. They do not establish real 3.3.5a
 frame rendering, addon load order, or client behavior.
+
+## Vellum visual test
+
+Install the addon from fork `main` after PR #3 is merged. No campaign package is needed for the
+fixture: `/wsaframe 40`, `/wsaframe 100`, `/wsaframe 150`, or `/wsaframe long`
+(600 words) opens the existing reader with neutral placeholder text. The ‹ ›
+history arrows are disabled for the fixture; real narration keeps its navigation.
+The command does not register a guide or change narration delivery state.
+
+The title uses the client's Morpheus display font (22), and the body uses its
+standard Friz Quadrata serif (default 16) with line spacing 3, without outlines or text
+shadows. Alegreya is deferred until the owner judges the client fonts. The reader
+stores position and size per character in the existing addon SavedVariables. Drag the frame to move;
+drag the bottom-right `/` grip to resize. The initial size is 520 × 340 UI units,
+with limits of 360 × 240 through 1000 × 900.
+
+Close uses a small × in the title row; history uses unboxed ‹ › arrows at the
+bottom right. Their ink matches the title and darkens on hover when enabled.
+`/wsaframe font <14-18>` sets the body size immediately and saves it per character;
+for example, `/wsaframe font 14`. It also works while the reader is closed,
+without opening it. The title stays at 22. Invalid values leave the setting alone.
+
+In-game checks (offline checks cannot establish rendering or DragonUI compatibility):
+
+1. At 3440×1440 and your usual UI scale, judge title/body sharpness and reading comfort for 40, 100 and 150 words.
+2. Repeat in a dark zone and a bright zone; the vellum should be opaque once the fade finishes.
+3. Check the straight border, subtle inner shade and light shadow, with no decorative edges.
+4. With DragonUI visible, check the × and ‹ › glyphs, placement, darker hover, clicks and resize grip.
+5. Close and reopen: the fade should take about 0.3 seconds and finish fully opaque.
+6. Run `/wsaframe long`; scroll to the end, resize narrower/wider, and check wrapping and button placement.
+7. Try `/wsaframe font 14` and `18`, then `/reload`; font, position and size should persist for that character.
+
+The regression harness also checks exact fixture word counts, isolation from
+narration delivery state, disabled fixture navigation, restored real navigation,
+resize reflow, geometry across module reload and characters, corrupt geometry
+fallback, fade completion/cleanup, ink control hover/close, font validation and
+font persistence/isolation. It does not simulate the client's font
+rasterizer, physical pixels, disk SavedVariables writes, or other addons.
