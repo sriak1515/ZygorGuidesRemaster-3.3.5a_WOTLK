@@ -61,7 +61,7 @@ UnitCastingInfo=function() return nil end
 UnitChannelInfo=function() return nil end
 
 local function newWidget(kind)
-	local widget={kind=kind,shown=false,scripts={},text='',width=0,height=0}
+	local widget={kind=kind,shown=false,scripts={},text='',width=0,height=0,enabled=true}
 	function widget:Show()
 		local wasShown=self.shown
 		self.shown=true
@@ -96,8 +96,11 @@ local function newWidget(kind)
 		end
 		return 0,0
 	end
+	function widget:IsEnabled() return self.enabled end
 	function widget:Enable() self.enabled=true end
 	function widget:Disable() self.enabled=false end
+	function widget:SetFont(path,size) self.fontPath,self.fontSize=path,size end
+	function widget:SetTextColor(...) self.ink={...} end
 	function widget:SetWidth(value) self.width=value end
 	function widget:GetWidth() return self.width or 0 end
 	function widget:SetHeight(value) self.height=value end
@@ -109,7 +112,7 @@ local function newWidget(kind)
 		self.scrollChild=child
 	end
 	function widget:GetScrollChild() return self.scrollChild end
-	function widget:GetVerticalScroll() return self.verticalScroll or 0 end
+	function widget:GetVerticalScroll() return rawget(self,'verticalScroll') or 0 end
 	function widget:SetVerticalScroll(value) self.verticalScroll=value end
 	function widget:GetVerticalScrollRange()
 		local viewport=self:GetHeight()
@@ -127,7 +130,7 @@ local function newWidget(kind)
 		if width<=0 then width=388 end
 		local charsPerLine=math.max(1,math.floor(width/7))
 		local lines=math.max(1,math.ceil(#(self.text or '')/charsPerLine))
-		return lines*16
+		return lines*(rawget(self,'fontSize') or 16)
 	end
 	function widget:UpdateScrollChildRect() end
 	function widget:EnableMouseWheel(value) self.mouseWheel=value end
@@ -682,4 +685,51 @@ check(N:OpenLatest(),'real narration did not reopen after fixture')
 equal(restored.earlier.enabled,true,'fixture left real navigation disabled')
 N:Close()
 
-print('PASS: narration lifecycle, scrolling, visual fixtures, geometry and fade')
+-- 15. Ink controls and font preferences keep delivery state independent.
+equal(restored.close.label:GetText(),'×','close symbol missing')
+equal(restored.close.point[1],'TOPRIGHT','close is not in title row')
+equal(restored.earlier.label:GetText(),'‹','earlier arrow missing')
+equal(restored.later.label:GetText(),'›','later arrow missing')
+local idleInk=restored.close.label.ink[1]
+restored.close.scripts.OnEnter(restored.close)
+check(restored.close.label.ink[1]<idleInk,'hover did not darken ink')
+restored.close.scripts.OnLeave(restored.close)
+equal(restored.close.label.ink[1],idleInk,'hover ink did not reset')
+local deliveryBeforeFont=snapshot(ZGV.db.char.campaignNarration)
+check(N:ShowFrameTest('long'),'font fixture did not open')
+for _,size in ipairs({14,18,16}) do
+	SlashCmdList.WSAFRAME('font '..size)
+	equal(ZGV.db.char.campaignNarrationFontSize,size,'font preference not saved')
+	equal(restored.body.fontSize,size,'open reader font not updated')
+end
+local savedSettings=snapshot(ZGV.db.char)
+for _,input in ipairs({'font 13','font 19','font 16.5','font nope','font 16 extra'}) do
+	check(not N:HandleFrameCommand(input),'invalid font setting accepted')
+	equal(snapshot(ZGV.db.char),savedSettings,'invalid setting changed saved state')
+end
+equal(snapshot(ZGV.db.char.campaignNarration),deliveryBeforeFont,'font setting changed delivery')
+SlashCmdList.WSAFRAME('font 14')
+restored.scripts.OnDragStop(restored)
+equal(ZGV.db.char.campaignNarrationFontSize,14,'moving reader lost font preference')
+restored.close.scripts.OnClick(restored.close)
+check(not N:IsReaderShown(),'close symbol did not close reader')
+assert(loadfile(root..'/Narration.lua'))()
+N=ZGV.CampaignNarration
+check(N:ShowFrameTest('40'),'font fixture failed after reload')
+for _,frame in ipairs(createdFrames) do
+	if type(frame.scroll)=='table' then restored=frame end
+end
+equal(restored.body.fontSize,14,'font preference not restored after reload')
+local fontChar=ZGV.db.char
+ZGV.db.char={}
+check(N:ShowFrameTest('40'),'new character fixture failed')
+equal(restored.body.fontSize,16,'font preference leaked across characters')
+N:Close()
+check(N:HandleFrameCommand('font 18'),'closed reader setting failed')
+check(not N:IsReaderShown(),'font command opened reader')
+check(N:ShowFrameTest('40'),'fixture failed after closed reader setting')
+equal(restored.body.fontSize,18,'closed reader setting not applied on opening')
+ZGV.db.char=fontChar
+N:Close()
+
+print('PASS: narration lifecycle, scrolling, fixtures, geometry, fade, ink controls and font settings')

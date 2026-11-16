@@ -454,6 +454,21 @@ local function fontPath()
 	return font or STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF'
 end
 
+local function readerFontSize()
+	local char=ZGV.db and ZGV.db.char
+	local size=char and char.campaignNarrationFontSize
+	return isInteger(size,18) and size>=14 and size or 16
+end
+
+local function applyReaderFont(reader)
+	reader.body:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF',readerFontSize())
+	if reader.updateScrollChild then reader.updateScrollChild() end
+	local scroll=reader.scroll
+	if scroll then
+		scroll:SetVerticalScroll(math.min(scroll:GetVerticalScroll(),scroll:GetVerticalScrollRange()))
+	end
+end
+
 local function addText(parent,size,y)
 	local text=parent:CreateFontString(nil,'ARTWORK')
 	if not text then return nil end
@@ -461,30 +476,26 @@ local function addText(parent,size,y)
 	text:SetTextColor(90/255,43/255,11/255)
 	text:SetShadowOffset(0,0)
 	text:SetPoint('TOPLEFT',parent,'TOPLEFT',16,y or -16)
-	text:SetPoint('TOPRIGHT',parent,'TOPRIGHT',-16,y or -16)
+	text:SetPoint('TOPRIGHT',parent,'TOPRIGHT',-48,y or -16)
 	text:SetJustifyH('LEFT')
 	return text
 end
 
-local function addButton(parent,label,x,width,callback)
+local function addButton(parent,label,callback)
 	local button=makeWidget('Button',parent)
 	if not button then return nil end
-	button:SetSize(width or 70,20)
-	button:SetPoint('BOTTOMLEFT',parent,'BOTTOMLEFT',x,16)
-	if button.SetBackdrop then
-		button:SetBackdrop({bgFile='Interface\\Buttons\\white8x8',edgeFile='Interface\\Buttons\\white8x8',tile=true,tileSize=8,edgeSize=1,insets={left=1,right=1,top=1,bottom=1}})
-		button:SetBackdropColor(210/255,188/255,146/255,1)
-		button:SetBackdropBorderColor(134/255,104/255,60/255,1)
-	end
+	button:SetSize(24,24)
 	local text=button:CreateFontString(nil,'ARTWORK')
-	if text then
-		text:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF',14)
-		text:SetTextColor(86/255,68/255,44/255)
-		text:SetShadowOffset(0,0)
-		text:SetPoint('CENTER',button,'CENTER',0,0)
-		text:SetText(label)
-		button.label=text
-	end
+	text:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF',20)
+	text:SetTextColor(90/255,43/255,11/255)
+	text:SetShadowOffset(0,0)
+	text:SetPoint('CENTER',button,'CENTER',0,0)
+	text:SetText(label)
+	button.label=text
+	button:SetScript('OnEnter',function(self)
+		if self:IsEnabled() then text:SetTextColor(44/255,31/255,16/255) end
+	end)
+	button:SetScript('OnLeave',function() text:SetTextColor(90/255,43/255,11/255) end)
 	button:SetScript('OnClick',function() callback() end)
 	return button
 end
@@ -655,13 +666,12 @@ local function ensureUI()
 			if scroll.UpdateScrollChildRect then scroll:UpdateScrollChildRect() end
 		end
 		scroll:SetScript('OnSizeChanged',updateScrollChild)
-		local close=addButton(reader,'Close',24,60,function() N:Close() end)
-		local earlier=addButton(reader,'Earlier',0,70,function() N:Cycle(-1) end)
-		local later=addButton(reader,'Later',0,70,function() N:Cycle(1) end)
-		earlier:ClearAllPoints()
-		earlier:SetPoint('BOTTOMRIGHT',reader,'BOTTOMRIGHT',-110,16)
-		later:ClearAllPoints()
-		later:SetPoint('BOTTOMRIGHT',reader,'BOTTOMRIGHT',-34,16)
+		local close=addButton(reader,'×',function() N:Close() end)
+		close:SetPoint('TOPRIGHT',reader,'TOPRIGHT',-16,-18)
+		local earlier=addButton(reader,'‹',function() N:Cycle(-1) end)
+		local later=addButton(reader,'›',function() N:Cycle(1) end)
+		earlier:SetPoint('BOTTOMRIGHT',reader,'BOTTOMRIGHT',-66,14)
+		later:SetPoint('BOTTOMRIGHT',reader,'BOTTOMRIGHT',-34,14)
 		local grip=makeWidget('Button',reader)
 		grip:SetSize(18,18)
 		grip:SetPoint('BOTTOMRIGHT',reader,'BOTTOMRIGHT',-3,3)
@@ -706,8 +716,12 @@ local function showReader(entry,record)
 		if reader.title then reader.title:SetText(entry.title or 'Story') end
 		if reader.body then reader.body:SetText(entry.text or '') end
 		if not reader:IsShown() then restoreReaderGeometry(reader) end
-		if entry.frameTest then reader.earlier:Disable(); reader.later:Disable()
-		else reader.earlier:Enable(); reader.later:Enable() end
+		for _,button in ipairs({reader.earlier,reader.later}) do
+			if entry.frameTest then button:Disable() else button:Enable() end
+			button:SetAlpha(entry.frameTest and 0.4 or 1)
+			button.label:SetTextColor(90/255,43/255,11/255)
+		end
+		applyReaderFont(reader)
 		reader:Show()
 		if reader.updateScrollChild then reader.updateScrollChild() end
 		if reader.scroll then
@@ -970,7 +984,7 @@ function N:ShowFrameTest(input)
 	local counts={['40']=40,['100']=100,['150']=150,long=600}
 	local count=counts[type(input)=='string' and input:match('^%s*(%S+)%s*$') or '']
 	if not count then
-		if ZGV.Print then ZGV:Print('Usage: /wsaframe 40|100|150|long (long = 600 words)') end
+		if ZGV.Print then ZGV:Print('Usage: /wsaframe 40|100|150|long (long = 600 words), or /wsaframe font <14-18>') end
 		return false
 	end
 	ensureCharacter()
@@ -984,7 +998,23 @@ function N:ShowFrameTest(input)
 	return showReader({title='Reader test: '..count..' words',text=table.concat(words),frameTest=true},nil)
 end
 
+function N:HandleFrameCommand(input)
+	local value=(input or ''):match('^%s*font%s+(%d+)%s*$')
+	if value then
+		local size=tonumber(value)
+		if isInteger(size,18) and size>=14 then
+			local char=ensureCharacter()
+			if not char then return false end
+			char.campaignNarrationFontSize=size
+			if type(ui)=='table' then applyReaderFont(ui.reader) end
+			if ZGV.Print then ZGV:Print('Reader body font: '..size) end
+			return true
+		end
+	end
+	return self:ShowFrameTest(input)
+end
+
 if type(SlashCmdList)=='table' then
 	SLASH_WSAFRAME1='/wsaframe'
-	SlashCmdList.WSAFRAME=function(input) N:ShowFrameTest(input) end
+	SlashCmdList.WSAFRAME=function(input) N:HandleFrameCommand(input) end
 end
