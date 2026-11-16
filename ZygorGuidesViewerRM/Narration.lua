@@ -579,6 +579,13 @@ local function ensureUI()
 			if type(InCombatLockdown)=='function' and InCombatLockdown() then return end
 			if button=='RightButton' then N:OpenHistory() else N:OpenLatest() end
 		end)
+		local elapsed=0
+		cue:SetScript('OnUpdate',function(_,delta)
+			elapsed=elapsed+delta
+			if elapsed<1 then return end
+			elapsed=0
+			N:MaybeAutoPresent()
+		end)
 		cue:Hide()
 
 		local reader=makeWidget('Frame',UIParent)
@@ -767,8 +774,10 @@ function N:RefreshCue()
 	widgets.cue:Show()
 end
 
-function N:CanAutoPresent()
+function N:CanAutoPresent(entry)
 	if type(InCombatLockdown)=='function' and InCombatLockdown() then return false end
+	if type(UnitOnTaxi)=='function' and UnitOnTaxi('player') then return false end
+	if entry and entry.type=='chapter' and type(GetUnitSpeed)=='function' and GetUnitSpeed('player')>0 then return false end
 	if type(UnitCastingInfo)=='function' and UnitCastingInfo('player') then return false end
 	if type(UnitChannelInfo)=='function' and UnitChannelInfo('player') then return false end
 	if type(SpellIsTargeting)=='function' and SpellIsTargeting() then return false end
@@ -788,7 +797,7 @@ function N:MaybeAutoPresent()
 	local state=stateFor(record,false)
 	if not state then return false end
 	local entry=firstPending(record,state)
-	if not entry or not self:CanAutoPresent() then return false end
+	if not entry or not self:CanAutoPresent(entry) then return false end
 	return self:OpenLatest()
 end
 
@@ -970,6 +979,7 @@ end
 -- query and never advance a step.
 if type(ZGV.startups)=='table' then
 	tinsert(ZGV.startups,function(self)
+		N:SetAutoOpen(true)
 		if not self.AddEvent then return end
 		self:AddEvent('QUEST_LOG_UPDATE',function() N:OnObservations() end)
 		self:AddEvent('QUEST_QUERY_COMPLETE',function() N:OnObservations() end)
