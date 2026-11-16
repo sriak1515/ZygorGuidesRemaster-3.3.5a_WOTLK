@@ -1,4 +1,9 @@
 <Bindings>
+  <Binding name="ZYGORGUIDES_OPENSTORY" header="ZYGORGUIDES">
+<![CDATA[
+if ZygorGuidesViewer and ZygorGuidesViewer.CampaignNarration then ZygorGuidesViewer.CampaignNarration:OpenHistory() end
+]]>
+  </Binding>
   <Binding name="ZYGORGUIDES_ACTIONBUTTON1" header="ZYGORGUIDES">
 <![CDATA[
 if ZygorGuidesViewer then ZygorGuidesViewer:ActionButtons_ClickBinding(1) end
