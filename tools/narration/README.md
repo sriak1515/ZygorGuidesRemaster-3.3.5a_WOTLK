@@ -32,9 +32,9 @@ Later are disabled for the fixture; real narration keeps its existing navigation
 The command does not register a guide or change narration delivery state.
 
 The title uses the client's Morpheus display font (22), and the body uses its
-standard Friz Quadrata serif (18), without outlines or text shadows. Alegreya is
-deferred until the owner judges the client fonts. The reader stores position and
-size per character in the existing addon SavedVariables. Drag the frame to move;
+standard Friz Quadrata serif (16) with line spacing 3, without outlines or text
+shadows. Alegreya is deferred until the owner judges the client fonts. The reader
+stores position and size per character in the existing addon SavedVariables. Drag the frame to move;
 drag the bottom-right `/` grip to resize. The initial size is 520 × 340 UI units,
 with limits of 360 × 240 through 1000 × 900.
 

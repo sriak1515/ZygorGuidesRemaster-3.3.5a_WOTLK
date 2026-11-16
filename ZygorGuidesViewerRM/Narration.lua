@@ -630,14 +630,14 @@ local function ensureUI()
 		scroll:SetScrollChild(child)
 		local body=child:CreateFontString(nil,'ARTWORK')
 		if not body then error('body') end
-		body:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF',18)
+		body:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF',16)
 		body:SetTextColor(44/255,31/255,16/255)
 		body:SetShadowOffset(0,0)
 		body:SetPoint('TOPLEFT',child,'TOPLEFT',0,0)
 		body:SetWidth(388)
 		body:SetJustifyH('LEFT')
 		body:SetJustifyV('TOP')
-		if body.SetSpacing then body:SetSpacing(4) end
+		if body.SetSpacing then body:SetSpacing(3) end
 		child.body=body
 		local function updateScrollChild()
 			local width=scroll.GetWidth and scroll:GetWidth() or 0
