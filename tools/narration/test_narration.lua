@@ -62,8 +62,16 @@ UnitChannelInfo=function() return nil end
 
 local function newWidget(kind)
 	local widget={kind=kind,shown=false,scripts={},text='',width=0,height=0}
-	function widget:Show() self.shown=true end
-	function widget:Hide() self.shown=false end
+	function widget:Show()
+		local wasShown=self.shown
+		self.shown=true
+		if not wasShown and self.scripts.OnShow then self.scripts.OnShow(self) end
+	end
+	function widget:Hide()
+		local wasShown=self.shown
+		self.shown=false
+		if wasShown and self.scripts.OnHide then self.scripts.OnHide(self) end
+	end
 	function widget:IsShown() return self.shown end
 	function widget:IsVisible() return self.shown end
 	function widget:SetText(value) self.text=value end
@@ -72,7 +80,24 @@ local function newWidget(kind)
 	function widget:GetScript(event) return self.scripts[event] end
 	function widget:CreateFontString() local child=newWidget('FontString'); child:Show(); return child end
 	function widget:CreateTexture() local child=newWidget('Texture'); child:Show(); return child end
-	function widget:GetAlpha() return 1 end
+	function widget:GetAlpha() return rawget(self,'alpha') or 1 end
+	function widget:SetAlpha(value) self.alpha=value end
+	function widget:SetSize(width,height)
+		self.width,self.height=width,height
+		if self.scripts.OnSizeChanged then self.scripts.OnSizeChanged(self,width,height) end
+	end
+	function widget:ClearAllPoints() self.point=nil end
+	function widget:SetPoint(...) self.point={...} end
+	function widget:GetCenter()
+		local point=rawget(self,'point')
+		if point and point[1]=='CENTER' then
+			local x,y=point[2]:GetCenter()
+			return x+point[4],y+point[5]
+		end
+		return 0,0
+	end
+	function widget:Enable() self.enabled=true end
+	function widget:Disable() self.enabled=false end
 	function widget:SetWidth(value) self.width=value end
 	function widget:GetWidth() return self.width or 0 end
 	function widget:SetHeight(value) self.height=value end
@@ -110,6 +135,7 @@ local function newWidget(kind)
 end
 UIParent=newWidget('Frame')
 UIParent:Show()
+SlashCmdList={}
 STANDARD_TEXT_FONT='Fonts\\FRIZQT__.TTF'
 GameFontNormal={GetFont=function() return STANDARD_TEXT_FONT end}
 local createdFrames={}
@@ -568,4 +594,92 @@ scroll.scripts.OnMouseWheel(scroll,-1)
 check(scroll:GetVerticalScroll()>0,'mouse wheel did not scroll the reader body')
 N:Close()
 
-print('PASS: narration metadata, conditions, recovery, combat, separation, scrolling and viewer lifecycle')
+-- 14. Visual fixtures use the same reader without touching delivery state.
+local function snapshot(value)
+	if type(value)~='table' then return tostring(value) end
+	local parts={}
+	for key,item in pairs(value) do parts[#parts+1]=tostring(key)..'='..snapshot(item) end
+	table.sort(parts)
+	return '{'..table.concat(parts,',')..'}'
+end
+local beforeFixture=snapshot(ZGV.db.char)
+equal(SLASH_WSAFRAME1,'/wsaframe','visual test command not registered')
+for _,input in ipairs({'40','100','150','long'}) do
+	SlashCmdList.WSAFRAME(input)
+	check(N:IsReaderShown(),'visual fixture did not open')
+	local entry=N:GetReaderEntry()
+	check(entry and entry.frameTest,'fixture entered real narration delivery')
+	local words=0
+	for _ in entry.text:gmatch('%S+') do words=words+1 end
+	equal(words,input=='long' and 600 or tonumber(input),'fixture word count')
+	equal(N:Cycle(1),nil,'fixture navigation opened game content')
+	equal(snapshot(ZGV.db.char),beforeFixture,'fixture changed saved state')
+	N:Close()
+end
+check(not N:ShowFrameTest('41'),'invalid fixture accepted')
+check(not N:IsReaderShown(),'invalid fixture opened the reader')
+check(N:ShowFrameTest(' 40 '),'trimmed fixture input rejected')
+local reader
+for _,frame in ipairs(createdFrames) do
+	if frame.scroll==scroll then reader=frame; break end
+end
+check(reader,'fixture did not reuse existing reader')
+equal(reader.earlier.enabled,false,'fixture enabled history navigation')
+equal(reader.later.enabled,false,'fixture enabled forward navigation')
+equal(reader:GetAlpha(),0,'opening did not begin fade')
+reader.scripts.OnUpdate(reader,0.15)
+equal(reader:GetAlpha(),0.5,'fade did not progress with elapsed time')
+reader.scripts.OnUpdate(reader,0.15)
+equal(reader:GetAlpha(),1,'fade did not finish opaque')
+equal(reader.scripts.OnUpdate,nil,'fade retained idle update handler')
+
+-- Resize reflows the scroll child; drag/resize save geometry across module reload.
+check(N:ShowFrameTest('long'),'long fixture did not reopen for resize')
+scroll:SetWidth(312)
+scroll:SetHeight(180)
+reader:SetSize(360,294)
+equal(child:GetWidth(),312,'resize did not reflow text width')
+local beforeResize=child:GetHeight()
+scroll:SetWidth(600)
+scroll.scripts.OnSizeChanged(scroll)
+check(child:GetHeight()<beforeResize,'wider viewport did not reduce text height')
+reader:ClearAllPoints()
+reader:SetPoint('CENTER',UIParent,'CENTER',123,-45)
+reader.scripts.OnDragStop(reader)
+equal(ZGV.db.char.campaignNarrationReader.x,123,'drag did not save position')
+reader:SetSize(648,400)
+reader.grip.scripts.OnMouseUp(reader.grip)
+equal(ZGV.db.char.campaignNarrationReader.width,648,'resize did not save width')
+N:Close()
+assert(loadfile(root..'/Narration.lua'))()
+N=ZGV.CampaignNarration
+check(N:ShowFrameTest('long'),'fixture failed after module reload')
+local restored
+for _,frame in ipairs(createdFrames) do
+	if type(frame.scroll)=='table' then restored=frame end
+end
+equal(restored:GetWidth(),648,'width not restored after reload')
+equal(restored:GetHeight(),400,'height not restored after reload')
+equal(restored.point[4],123,'horizontal position not restored')
+equal(restored.point[5],-45,'vertical position not restored')
+N:Close()
+equal(restored.scripts.OnUpdate,nil,'closing retained fade handler')
+local previousChar=ZGV.db.char
+ZGV.db.char={}
+check(N:ShowFrameTest('40'),'fixture failed for fresh character')
+equal(restored:GetWidth(),520,'geometry leaked across characters')
+equal(ZGV.db.char.campaignNarration,nil,'fixture created delivery state')
+N:Close()
+ZGV.db.char=previousChar
+ZGV.db.char.campaignNarrationReader={x=0,y=0,width=0/0,height=400}
+check(N:ShowFrameTest('40'),'corrupt geometry prevented opening')
+equal(restored:GetWidth(),520,'corrupt geometry did not use default width')
+N:Close()
+N:SetAutoOpen(false)
+ZGV.db.char.campaignNarrationReader=nil
+check(N:Register(longMetadata),'real narration did not register after reload')
+check(N:OpenLatest(),'real narration did not reopen after fixture')
+equal(restored.earlier.enabled,true,'fixture left real navigation disabled')
+N:Close()
+
+print('PASS: narration lifecycle, scrolling, visual fixtures, geometry and fade')
