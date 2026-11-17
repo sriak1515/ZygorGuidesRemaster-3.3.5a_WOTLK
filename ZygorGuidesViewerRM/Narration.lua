@@ -469,7 +469,7 @@ local function readerFontSize()
 end
 
 local function applyReaderFont(reader)
-	reader.body:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF',readerFontSize())
+	reader.body:SetFont('Fonts\\FRIZQT__.TTF',readerFontSize())
 	if reader.updateScrollChild then reader.updateScrollChild() end
 	local scroll=reader.scroll
 	if scroll then
@@ -574,12 +574,13 @@ local function ensureUI()
 		cue:SetPoint('TOPLEFT',bar,'TOPLEFT',6,-6)
 		if cue.SetBackdrop then
 			cue:SetBackdrop({bgFile='Interface\\Buttons\\white8x8',edgeFile='Interface\\Buttons\\white8x8',tile=true,tileSize=8,edgeSize=1,insets={left=1,right=1,top=1,bottom=1}})
-			cue:SetBackdropColor(0.05,0.05,0.07,0.90)
-			cue:SetBackdropBorderColor(0.45,0.38,0.22,1)
+			cue:SetBackdropColor(210/255,188/255,146/255,1)
+			cue:SetBackdropBorderColor(134/255,104/255,60/255,1)
 		end
 		local label=cue:CreateFontString(nil,'ARTWORK')
 		if not label then error('label') end
-		label:SetFont(fontPath(),12)
+		label:SetFont('Fonts\\FRIZQT__.TTF',12)
+		label:SetTextColor(44/255,31/255,16/255)
 		label:SetPoint('CENTER',cue,'CENTER',0,0)
 		label:SetText('|TInterface\\Icons\\INV_Misc_Book_09:18|t')
 		cue.label=label
@@ -633,8 +634,6 @@ local function ensureUI()
 			reader:SetBackdropColor(210/255,188/255,146/255,1)
 			reader:SetBackdropBorderColor(134/255,104/255,60/255,1)
 		end
-		shadeEdges(reader,true)
-		shadeEdges(reader,false)
 		local title=addText(reader,22,-18)
 		title:SetJustifyH('LEFT')
 		local scroll=makeWidget('ScrollFrame',reader)
@@ -657,7 +656,7 @@ local function ensureUI()
 		scroll:SetScrollChild(child)
 		local body=child:CreateFontString(nil,'ARTWORK')
 		if not body then error('body') end
-		body:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF',16)
+		body:SetFont('Fonts\\FRIZQT__.TTF',16)
 		body:SetTextColor(44/255,31/255,16/255)
 		body:SetShadowOffset(0,0)
 		body:SetPoint('TOPLEFT',child,'TOPLEFT',0,0)
