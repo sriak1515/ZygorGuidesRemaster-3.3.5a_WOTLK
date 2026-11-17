@@ -247,10 +247,10 @@ local guide=parseLastGuide()
 local acceptStep,objectiveStep,rewardStep=guide.steps[1],guide.steps[2],guide.steps[3]
 check(acceptStep and objectiveStep and rewardStep,'fixture steps missing')
 
--- Focus records the anchor without bypassing its reveal condition.
+-- Focus does not unlock the focused completion anchor.
 N:OnStepFocused(guide,rewardStep)
 equal(status().pending,0,'manual jump ahead revealed future narration')
-equal(status().anchors,1,'focus did not record anchor')
+equal(status().anchors,1,'earlier passage was not recorded')
 ZGV.db.char.campaignNarration=nil
 equal(N:ResolveGuideStep(guide.title,13),1,'stale position not reset')
 equal(N:ResolveGuideStep(guide.title,13),13,'unchanged build lost position')
@@ -266,7 +266,7 @@ equal(#entries,1,'unexpected eligible entry count')
 equal(entries[1].id,'balance-first-duty','wrong anchor association')
 N:OnStepFocused(guide,objectiveStep)
 N:OnStepFocused(guide,rewardStep)
-equal(status().pending,1,'rapid native advancement discarded narration')
+equal(status().pending,0,'earlier passage was not marked delivered')
 equal(N:IsReaderShown(),false,'cue mode unexpectedly opened the reader')
 
 -- 3. Once-only presentation and reopening through history without a Mark read
@@ -365,8 +365,8 @@ local charA=savedChar
 local charB={permaCompletedDailies={}}
 ZGV.db.char=charB
 N:OnStepFocused(guide,guide.steps[1])
-equal(status().pending,1,'focused passage unavailable')
-equal(status().anchors,1,'focus did not record anchor')
+equal(status().pending,0,'new character inherited pending narration')
+equal(status().anchors,0,'new character inherited completed anchors')
 ZGV.db.char=charA
 N:OnStepFocused(guide,guide.steps[3])
 equal(status().pending,1,'first character lost its pending narration')

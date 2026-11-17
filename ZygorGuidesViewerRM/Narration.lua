@@ -144,7 +144,7 @@ local function buildRecord(metadata)
 	if not isArray(view.steps,MAX_STEPS) or #view.steps==0 then return nil,'invalid-steps' end
 	if not isArray(view.goals,MAX_GOALS) then return nil,'invalid-goals' end
 
-	local steps,labels={},{}
+	local steps,labels,stepOrder={},{},{}
 	for index,mapping in ipairs(view.steps) do
 		if not allowedFields(mapping,'source_step_id source_path native_parts') then return nil,'invalid-step' end
 		if not isText(mapping.source_step_id,MAX_ID) or steps[mapping.source_step_id] then
@@ -153,6 +153,7 @@ local function buildRecord(metadata)
 		if not isText(mapping.source_path,MAX_ID) then return nil,'invalid-step' end
 		if not isArray(mapping.native_parts,8) or #mapping.native_parts==0 then return nil,'invalid-step' end
 		steps[mapping.source_step_id]=true
+		stepOrder[mapping.source_step_id]=index
 		for _,label in ipairs(mapping.native_parts) do
 			if not isText(label,MAX_ID) or labels[label] then return nil,'duplicate-label' end
 			labels[label]=mapping.source_step_id
@@ -244,6 +245,7 @@ local function buildRecord(metadata)
 		title=metadata.guide.title,
 		registration=view.registration,
 		steps=labels,
+		step_order=stepOrder,
 		source_steps=steps,
 		passages=passages,
 		by_id=byId,
@@ -828,15 +830,20 @@ function N:OnStepFocused(guide,step)
 	local record=currentRecord()
 	if readerRecord and readerRecord~=record then self:Close() end
 	local source_id=record and step and step.label and record.steps[step.label]
-	if source_id and record.by_anchor[source_id] then
+	local position=source_id and record.step_order[source_id]
+	if position then
 		local state=stateFor(record,true)
 		if state then
-			state.anchors[source_id]=true
-			evaluateRecord(record,state)
+			for _,passage in ipairs(record.passages) do
+				if record.step_order[passage.at_step]<position and evaluate(passage.requires)==true then
+					state.anchors[passage.at_step]=true
+					state.pending[passage.id]=nil
+					state.delivered[passage.id]=passage.revision
+				end
+			end
 		end
 	end
 	self:RefreshCue()
-	self:MaybeAutoPresent()
 end
 
 function N:ResolveGuideStep(title,step)
