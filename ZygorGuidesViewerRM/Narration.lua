@@ -831,6 +831,7 @@ function N:OnStepFocused(guide,step)
 	ensureCharacter()
 	local record=currentRecord()
 	if readerRecord and readerRecord~=record then self:Close() end
+	if focusedRecord~=record then focusedRecord,focusedPosition=nil,nil end
 	local source_id=record and step and step.label and record.steps[step.label]
 	local position=source_id and record.step_order[source_id]
 	if position then
