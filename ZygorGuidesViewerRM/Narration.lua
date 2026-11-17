@@ -18,6 +18,7 @@ local upper = string.upper
 local registry = {}       -- native registration -> record
 local byGuideId = {}      -- authored guide id -> record
 local currentChar         -- identity of the per-character delivery store
+local focusedRecord,focusedPosition
 local ui                  -- lazily created reader
 local readerEntry         -- entry currently shown
 local readerRecord        -- record currently shown
@@ -263,6 +264,7 @@ local function ensureCharacter()
 	local char=ZGV.db and ZGV.db.char
 	if char~=currentChar then
 		currentChar=char
+		focusedRecord,focusedPosition=nil,nil
 		readerEntry,readerRecord=nil,nil
 		if type(ui)=='table' and ui.reader then ui.reader:Hide() end
 	end
@@ -832,16 +834,19 @@ function N:OnStepFocused(guide,step)
 	local source_id=record and step and step.label and record.steps[step.label]
 	local position=source_id and record.step_order[source_id]
 	if position then
+		local previous=focusedRecord==record and focusedPosition or 1
 		local state=stateFor(record,true)
-		if state then
+		if state and position>previous then
 			for _,passage in ipairs(record.passages) do
-				if record.step_order[passage.at_step]<position and evaluate(passage.requires)==true then
+				local anchor=record.step_order[passage.at_step]
+				if anchor>=previous and anchor<position then
 					state.anchors[passage.at_step]=true
 					state.pending[passage.id]=nil
 					state.delivered[passage.id]=passage.revision
 				end
 			end
 		end
+		focusedRecord,focusedPosition=record,position
 	end
 	self:RefreshCue()
 end
