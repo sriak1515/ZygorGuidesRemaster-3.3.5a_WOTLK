@@ -247,10 +247,13 @@ local guide=parseLastGuide()
 local acceptStep,objectiveStep,rewardStep=guide.steps[1],guide.steps[2],guide.steps[3]
 check(acceptStep and objectiveStep and rewardStep,'fixture steps missing')
 
--- Manual ahead-jump is only a focus observation, not completion.
+-- Focus does not unlock the focused completion anchor.
 N:OnStepFocused(guide,rewardStep)
 equal(status().pending,0,'manual jump ahead revealed future narration')
-equal(status().anchors,0,'manual jump ahead marked an anchor complete')
+equal(status().anchors,1,'earlier passage was not recorded')
+ZGV.db.char.campaignNarration=nil
+equal(N:ResolveGuideStep(guide.title,13),1,'stale position not reset')
+equal(N:ResolveGuideStep(guide.title,13),13,'unchanged build lost position')
 
 -- 2. Normal native completion records the authored anchor and retains it while
 -- Zygor advances immediately to later steps.
@@ -263,7 +266,7 @@ equal(#entries,1,'unexpected eligible entry count')
 equal(entries[1].id,'balance-first-duty','wrong anchor association')
 N:OnStepFocused(guide,objectiveStep)
 N:OnStepFocused(guide,rewardStep)
-equal(status().pending,1,'rapid native advancement discarded narration')
+equal(status().pending,0,'earlier passage was not marked delivered')
 equal(N:IsReaderShown(),false,'cue mode unexpectedly opened the reader')
 
 -- 3. Once-only presentation and reopening through history without a Mark read

@@ -144,7 +144,7 @@ local function buildRecord(metadata)
 	if not isArray(view.steps,MAX_STEPS) or #view.steps==0 then return nil,'invalid-steps' end
 	if not isArray(view.goals,MAX_GOALS) then return nil,'invalid-goals' end
 
-	local steps,labels={},{}
+	local steps,labels,stepOrder={},{},{}
 	for index,mapping in ipairs(view.steps) do
 		if not allowedFields(mapping,'source_step_id source_path native_parts') then return nil,'invalid-step' end
 		if not isText(mapping.source_step_id,MAX_ID) or steps[mapping.source_step_id] then
@@ -153,6 +153,7 @@ local function buildRecord(metadata)
 		if not isText(mapping.source_path,MAX_ID) then return nil,'invalid-step' end
 		if not isArray(mapping.native_parts,8) or #mapping.native_parts==0 then return nil,'invalid-step' end
 		steps[mapping.source_step_id]=true
+		stepOrder[mapping.source_step_id]=index
 		for _,label in ipairs(mapping.native_parts) do
 			if not isText(label,MAX_ID) or labels[label] then return nil,'duplicate-label' end
 			labels[label]=mapping.source_step_id
@@ -240,9 +241,11 @@ local function buildRecord(metadata)
 
 	local record={
 		guide_id=metadata.guide.id,
+		build=(metadata.provenance and metadata.provenance.source_sha256 or view.payload_sha256)..':'..(metadata.provenance and metadata.provenance.compiler_sha256 or ''),
 		title=metadata.guide.title,
 		registration=view.registration,
 		steps=labels,
+		step_order=stepOrder,
 		source_steps=steps,
 		passages=passages,
 		by_id=byId,
@@ -826,7 +829,33 @@ function N:OnStepFocused(guide,step)
 	ensureCharacter()
 	local record=currentRecord()
 	if readerRecord and readerRecord~=record then self:Close() end
+	local source_id=record and step and step.label and record.steps[step.label]
+	local position=source_id and record.step_order[source_id]
+	if position then
+		local state=stateFor(record,true)
+		if state then
+			for _,passage in ipairs(record.passages) do
+				if record.step_order[passage.at_step]<position and evaluate(passage.requires)==true then
+					state.anchors[passage.at_step]=true
+					state.pending[passage.id]=nil
+					state.delivered[passage.id]=passage.revision
+				end
+			end
+		end
+	end
 	self:RefreshCue()
+end
+
+function N:ResolveGuideStep(title,step)
+	local record=registry[title]
+	local char=ensureCharacter()
+	if not record or not char then return step end
+	char.campaignGuideBuilds=char.campaignGuideBuilds or {}
+	if char.campaignGuideBuilds[title]~=record.build then
+		char.campaignGuideBuilds[title]=record.build
+		return 1
+	end
+	return step
 end
 
 function N:OnStepCompleted(guide,step,complete)
@@ -911,7 +940,14 @@ function N:OpenLatest(registration)
 	if not record then return nil end
 	local state=stateFor(record,false)
 	if not state then return nil end
-	local entry=firstPending(record,state) or latestDelivered(record,state)
+	local entry=firstPending(record,state)
+	if not entry and ZGV.CurrentStep then
+		local anchor=record.steps[ZGV.CurrentStep.label]
+		for _,item in ipairs(ordered(record,state)) do
+			if item.passage.at_step==anchor then entry=entryFor(record,item) end
+		end
+	end
+	entry=entry or latestDelivered(record,state)
 	if entry and self:Present(entry) then return entry end
 	return nil
 end
