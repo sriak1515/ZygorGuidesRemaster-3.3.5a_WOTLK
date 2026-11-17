@@ -252,6 +252,7 @@ N:OnStepFocused(guide,rewardStep)
 equal(status().pending,0,'manual jump ahead revealed future narration')
 equal(status().anchors,1,'earlier passage was not recorded')
 ZGV.db.char.campaignNarration=nil
+N:OnStepFocused(guide,acceptStep)
 equal(N:ResolveGuideStep(guide.title,13),1,'stale position not reset')
 equal(N:ResolveGuideStep(guide.title,13),13,'unchanged build lost position')
 
