@@ -247,10 +247,13 @@ local guide=parseLastGuide()
 local acceptStep,objectiveStep,rewardStep=guide.steps[1],guide.steps[2],guide.steps[3]
 check(acceptStep and objectiveStep and rewardStep,'fixture steps missing')
 
--- Manual ahead-jump is only a focus observation, not completion.
+-- Focus records the anchor without bypassing its reveal condition.
 N:OnStepFocused(guide,rewardStep)
 equal(status().pending,0,'manual jump ahead revealed future narration')
-equal(status().anchors,0,'manual jump ahead marked an anchor complete')
+equal(status().anchors,1,'focus did not record anchor')
+ZGV.db.char.campaignNarration=nil
+equal(N:ResolveGuideStep(guide.title,13),1,'stale position not reset')
+equal(N:ResolveGuideStep(guide.title,13),13,'unchanged build lost position')
 
 -- 2. Normal native completion records the authored anchor and retains it while
 -- Zygor advances immediately to later steps.
@@ -362,8 +365,8 @@ local charA=savedChar
 local charB={permaCompletedDailies={}}
 ZGV.db.char=charB
 N:OnStepFocused(guide,guide.steps[1])
-equal(status().pending,0,'new character inherited pending narration')
-equal(status().anchors,0,'new character inherited completed anchors')
+equal(status().pending,1,'focused passage unavailable')
+equal(status().anchors,1,'focus did not record anchor')
 ZGV.db.char=charA
 N:OnStepFocused(guide,guide.steps[3])
 equal(status().pending,1,'first character lost its pending narration')

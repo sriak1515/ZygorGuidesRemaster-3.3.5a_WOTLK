@@ -240,6 +240,7 @@ local function buildRecord(metadata)
 
 	local record={
 		guide_id=metadata.guide.id,
+		build=(metadata.provenance and metadata.provenance.source_sha256 or view.payload_sha256)..':'..(metadata.provenance and metadata.provenance.compiler_sha256 or ''),
 		title=metadata.guide.title,
 		registration=view.registration,
 		steps=labels,
@@ -826,7 +827,28 @@ function N:OnStepFocused(guide,step)
 	ensureCharacter()
 	local record=currentRecord()
 	if readerRecord and readerRecord~=record then self:Close() end
+	local source_id=record and step and step.label and record.steps[step.label]
+	if source_id and record.by_anchor[source_id] then
+		local state=stateFor(record,true)
+		if state then
+			state.anchors[source_id]=true
+			evaluateRecord(record,state)
+		end
+	end
 	self:RefreshCue()
+	self:MaybeAutoPresent()
+end
+
+function N:ResolveGuideStep(title,step)
+	local record=registry[title]
+	local char=ensureCharacter()
+	if not record or not char then return step end
+	char.campaignGuideBuilds=char.campaignGuideBuilds or {}
+	if char.campaignGuideBuilds[title]~=record.build then
+		char.campaignGuideBuilds[title]=record.build
+		return 1
+	end
+	return step
 end
 
 function N:OnStepCompleted(guide,step,complete)
@@ -911,7 +933,14 @@ function N:OpenLatest(registration)
 	if not record then return nil end
 	local state=stateFor(record,false)
 	if not state then return nil end
-	local entry=firstPending(record,state) or latestDelivered(record,state)
+	local entry=firstPending(record,state)
+	if not entry and ZGV.CurrentStep then
+		local anchor=record.steps[ZGV.CurrentStep.label]
+		for _,item in ipairs(ordered(record,state)) do
+			if item.passage.at_step==anchor then entry=entryFor(record,item) end
+		end
+	end
+	entry=entry or latestDelivered(record,state)
 	if entry and self:Present(entry) then return entry end
 	return nil
 end

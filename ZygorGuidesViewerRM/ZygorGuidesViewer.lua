@@ -4350,6 +4350,9 @@ function me:SetGuide(name,step,temp)
 		if not step then
 			step = self:GetRememberedGuideStep(name) or 1
 		end
+		if self.CampaignNarration then
+			step = self.CampaignNarration:ResolveGuideStep(name,step)
+		end
 
 
 		if #self.CurrentGuide.steps<step then
