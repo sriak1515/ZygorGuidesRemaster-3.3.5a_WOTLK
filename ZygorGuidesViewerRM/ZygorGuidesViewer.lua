@@ -7873,6 +7873,10 @@ function me:SkipStep(delta,fast)
 	repeat
 		self:Debug("SkipStep "..delta.." "..(fast and 'fast' or ''))
 		local i = self.CurrentStepNum+delta
+		if delta>0 and i>#self.CurrentGuide.steps then
+			self.pause=true
+			return
+		end
 		if i<1 then
 			--if self.CurrentGuideName==1 then return end		-- first section? bail.
 			if self.CurrentGuide.defaultfor then 
