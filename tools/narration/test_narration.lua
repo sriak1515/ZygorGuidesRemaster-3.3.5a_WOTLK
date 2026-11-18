@@ -226,6 +226,7 @@ end
 
 local function completeStep(step)
 	assert(step:IsComplete(),'fixture step did not complete')
+	N:OnStepCompleted(ZGV.CurrentGuide,step,false)
 	N:OnStepCompleted(ZGV.CurrentGuide,step,true)
 end
 
@@ -250,10 +251,10 @@ check(acceptStep and objectiveStep and rewardStep,'fixture steps missing')
 -- Focus does not unlock the focused completion anchor.
 N:OnStepFocused(guide,rewardStep)
 equal(status().pending,0,'manual jump ahead revealed future narration')
-equal(status().anchors,1,'earlier passage was not recorded')
+equal(status().anchors,0,'jump delivered narration')
 ZGV.db.char.campaignNarration=nil
 N:OnStepFocused(guide,acceptStep)
-equal(N:ResolveGuideStep(guide.title,13),1,'stale position not reset')
+equal(N:ResolveGuideStep(guide.title,13),13,'legacy position not retained')
 equal(N:ResolveGuideStep(guide.title,13),13,'unchanged build lost position')
 
 -- 2. Normal native completion records the authored anchor and retains it while
@@ -267,7 +268,7 @@ equal(#entries,1,'unexpected eligible entry count')
 equal(entries[1].id,'balance-first-duty','wrong anchor association')
 N:OnStepFocused(guide,objectiveStep)
 N:OnStepFocused(guide,rewardStep)
-equal(status().pending,0,'earlier passage was not marked delivered')
+equal(status().pending,1,'navigation changed pending narration')
 equal(N:IsReaderShown(),false,'cue mode unexpectedly opened the reader')
 
 -- 3. Once-only presentation and reopening through history without a Mark read
@@ -275,6 +276,14 @@ equal(N:IsReaderShown(),false,'cue mode unexpectedly opened the reader')
 local first=N:OpenLatest()
 check(first and first.id=='balance-first-duty','pending passage did not open')
 equal(N:IsReaderShown(),true,'reader did not open')
+local initialReader
+for _,frame in ipairs(createdFrames) do if type(frame.earlier)=='table' then initialReader=frame end end
+check(initialReader.title:GetText():find('1 / 1',1,true),'position missing')
+equal(initialReader.earlier.enabled,false,'first arrow enabled')
+equal(initialReader.later.enabled,false,'last arrow enabled')
+equal(N:Cycle(-1),nil,'previous wrapped')
+equal(N:Cycle(1),nil,'next wrapped')
+
 equal(status().pending,0,'presentation left the passage pending')
 equal(status().delivered,1,'presentation was not recorded')
 local reopened=N:OpenHistory()
@@ -403,7 +412,7 @@ equal(N:IsReaderShown(),false,'taxi opened the reader')
 UnitOnTaxi=function() return false end
 local cue
 for _,frame in ipairs(createdFrames) do
-	if type(frame.label)=='table' and frame.label:GetText():match('^Story') and frame.scripts.OnUpdate then cue=frame end
+	if type(frame.label)=='table' and frame.scripts.OnUpdate and frame.scripts.OnUpdate then cue=frame end
 end
 assert(cue,'story cue retry missing')
 cue.scripts.OnUpdate(cue,1)
@@ -502,10 +511,23 @@ local start=assert(source:find('function me:TryToCompleteStep(force)',1,true),'T
 local finish=assert(source:find('function me:InitializeDropDown(',start,true),'TryToCompleteStep end missing')
 local chunk=assert((loadstring or load)('local me=...\n'..source:sub(start,finish-1)),'TryToCompleteStep did not load')
 chunk(ZGV)
+N:OnStepCompleted(guide,acceptStep,false)
 ZGV:TryToCompleteStep(true)
 equal(ZGV.skipped,1,'ordinary native advancement did not run')
 equal(N:GetStatus('WoW Solo Adventure V1\\EXAMPLE-KAL-01-BALANCE-ONE').anchors,1,'viewer lifecycle did not record narration anchor')
 equal(N:GetStatus('WoW Solo Adventure V1\\EXAMPLE-KAL-01-BALANCE-ONE').pending,1,'viewer lifecycle lost narration')
+
+-- Deliberate completion uses the native completion pass and only this step.
+ZGV.db.char={permaCompletedDailies={}}
+ZGV.CurrentStep=acceptStep; ZGV.CurrentStepNum=1; ZGV.skipped=0; ZGV.pause=nil
+N:OnStepFocused(guide,acceptStep)
+N:SetAutoOpen(true)
+SlashCmdList.JOURNEY('done')
+equal(ZGV.skipped,1,'manual completion did not advance once')
+equal(status().anchors,1,'manual completion did not record current anchor')
+equal(status().delivered,1,'manual completion did not open passage')
+check(N:IsReaderShown(),'manual completion did not auto-open')
+N:Close(); N:SetAutoOpen(false)
 
 -- 11. A narration hook fault is debug-only and cannot abort native advancement.
 local debugMessages={}
@@ -556,6 +578,7 @@ ZGV.CurrentGuideName='WoW Solo Adventure V1\\EXAMPLE-KAL-01-BALANCE-ONE'
 ZGV.questsbyid={[456]={index=1,complete=false,goals={{num=0,needed=7},{num=0,needed=4}}}}
 ZGV.questLogInitialized=true
 N:OnStepFocused(guide,acceptStep)
+N:OnStepCompleted(guide,acceptStep,false)
 N:OnStepCompleted(guide,acceptStep,true)
 equal(status().pending,1,'reader failure lost pending narration')
 equal(N:OpenLatest(),nil,'reader failure reported successful presentation')
@@ -601,6 +624,7 @@ ZGV.CurrentGuide=longGuide
 ZGV.CurrentGuideName=longRegistration
 local longStep={label='long-step',goals={},AreRequirementsMet=function() return true end}
 N:OnStepFocused(longGuide,longStep)
+N:OnStepCompleted(longGuide,longStep,false)
 N:OnStepCompleted(longGuide,longStep,true)
 local longEntry=N:OpenLatest()
 check(longEntry and longEntry.id=='long-passage','long passage did not open')
@@ -707,7 +731,7 @@ N:SetAutoOpen(false)
 ZGV.db.char.campaignNarrationReader=nil
 check(N:Register(longMetadata),'real narration did not register after reload')
 check(N:OpenLatest(),'real narration did not reopen after fixture')
-equal(restored.earlier.enabled,true,'fixture left real navigation disabled')
+equal(restored.earlier.enabled,false,'first passage navigation enabled')
 N:Close()
 
 -- 15. Ink controls and font preferences keep delivery state independent.

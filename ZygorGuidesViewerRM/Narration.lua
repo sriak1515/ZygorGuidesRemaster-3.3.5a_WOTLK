@@ -19,6 +19,7 @@ local registry = {}       -- native registration -> record
 local byGuideId = {}      -- authored guide id -> record
 local currentChar         -- identity of the per-character delivery store
 local focusedRecord,focusedPosition
+local observedIncomplete,manualDone
 local ui                  -- lazily created reader
 local readerEntry         -- entry currently shown
 local readerRecord        -- record currently shown
@@ -377,7 +378,9 @@ local function ordered(record,state)
 		end
 	end
 	tsort(list,function(a,b)
-		local ao,bo=a.passage.source_order or 0,b.passage.source_order or 0
+		local ao,bo=record.step_order[a.passage.at_step],record.step_order[b.passage.at_step]
+		if ao~=bo then return ao<bo end
+		ao,bo=a.passage.source_order or 0,b.passage.source_order or 0
 		if ao~=bo then return ao<bo end
 		return a.passage.id<b.passage.id
 	end)
@@ -564,10 +567,11 @@ local function ensureUI()
 	-- UIParent if metadata loads before AceAddon OnInitialize has assigned it.
 	if not ZGV.Frame then return nil end
 	local ok,cue,reader=pcall(function()
-		local cue=makeWidget('Button',ZGV.Frame or UIParent)
+		local bar=_G.ZygorGuidesViewerFrame_Border_TitleBar or ZGV.Frame
+		local cue=makeWidget('Button',bar)
 		if not cue then error('cue') end
-		cue:SetSize(64,20)
-		cue:SetPoint('TOPRIGHT',ZGV.Frame or UIParent,'TOPRIGHT',-4,4)
+		cue:SetSize(28,20)
+		cue:SetPoint('TOPLEFT',bar,'TOPLEFT',6,-6)
 		if cue.SetBackdrop then
 			cue:SetBackdrop({bgFile='Interface\\Buttons\\white8x8',edgeFile='Interface\\Buttons\\white8x8',tile=true,tileSize=8,edgeSize=1,insets={left=1,right=1,top=1,bottom=1}})
 			cue:SetBackdropColor(0.05,0.05,0.07,0.90)
@@ -577,12 +581,12 @@ local function ensureUI()
 		if not label then error('label') end
 		label:SetFont(fontPath(),12)
 		label:SetPoint('CENTER',cue,'CENTER',0,0)
-		label:SetText('Story')
+		label:SetText('|TInterface\\Icons\\INV_Misc_Book_09:18|t')
 		cue.label=label
-		cue:RegisterForClicks('LeftButtonUp','RightButtonUp')
+		cue:RegisterForClicks('LeftButtonUp')
 		cue:SetScript('OnClick',function(_,button)
 			if type(InCombatLockdown)=='function' and InCombatLockdown() then return end
-			if button=='RightButton' then N:OpenHistory() else N:OpenLatest() end
+			if N:IsReaderShown() then N:Close() else N:OpenLatest() end
 		end)
 		local elapsed=0
 		cue:SetScript('OnUpdate',function(_,delta)
@@ -725,12 +729,16 @@ local function showReader(entry,record)
 	if not widgets then return false end
 	local reader=widgets.reader
 	local ok=pcall(function()
-		if reader.title then reader.title:SetText(entry.title or 'Story') end
+		local list=record and ordered(record,stateFor(record,true)) or {}
+		local index=1
+		for i,item in ipairs(list) do if item.passage.id==entry.id then index=i end end
+		if reader.title then reader.title:SetText((entry.title or 'Story')..(record and ('  '..index..' / '..#list) or '')) end
 		if reader.body then reader.body:SetText(entry.text or '') end
 		if not reader:IsShown() then restoreReaderGeometry(reader) end
-		for _,button in ipairs({reader.earlier,reader.later}) do
-			if entry.frameTest then button:Disable() else button:Enable() end
-			button:SetAlpha(entry.frameTest and 0.4 or 1)
+		for i,button in ipairs({reader.earlier,reader.later}) do
+			local disabled=entry.frameTest or (i==1 and index<=1) or (i==2 and index>=#list)
+			if disabled then button:Disable() else button:Enable() end
+			button:SetAlpha(disabled and 0.4 or 1)
 			button.label:SetTextColor(90/255,43/255,11/255)
 		end
 		applyReaderFont(reader)
@@ -772,10 +780,7 @@ function N:RefreshCue()
 	for _,item in ipairs(list) do
 		if item.status=='pending' then pending=pending+1 end
 	end
-	if widgets.cue.label then
-		widgets.cue.label:SetText(pending>0 and ('Story ('..pending..')') or 'Story')
-	end
-	if widgets.cue.SetWidth then widgets.cue:SetWidth(pending>0 and 88 or 64) end
+
 	widgets.cue:Show()
 end
 
@@ -828,44 +833,80 @@ function N:Register(metadata)
 end
 
 function N:OnStepFocused(guide,step)
-	ensureCharacter()
-	local record=currentRecord()
-	if readerRecord and readerRecord~=record then self:Close() end
-	if focusedRecord~=record then focusedRecord,focusedPosition=nil,nil end
-	local source_id=record and step and step.label and record.steps[step.label]
-	local position=source_id and record.step_order[source_id]
-	if position then
-		local previous=focusedRecord==record and focusedPosition or 1
-		local state=stateFor(record,true)
-		if state and position>previous then
-			for _,passage in ipairs(record.passages) do
-				local anchor=record.step_order[passage.at_step]
-				if anchor>=previous and anchor<position then
-					state.anchors[passage.at_step]=true
-					state.pending[passage.id]=nil
-					state.delivered[passage.id]=passage.revision
-				end
-			end
-		end
-		focusedRecord,focusedPosition=record,position
-	end
-	self:RefreshCue()
+ ensureCharacter()
+ local record=guide and registry[guide.title]
+ if readerRecord and readerRecord~=record then self:Close() end
+ focusedRecord=record
+ focusedPosition=record and step and record.steps[step.label]
+ observedIncomplete=false
+ if focusedPosition and step.IsComplete then observedIncomplete=not step:IsComplete() end
+ local char=ensureCharacter()
+ local progress=char and char.guide_progress and char.guide_progress[guide.title]
+ if progress and focusedPosition then progress.source_step_id=focusedPosition end
+ self:RefreshCue()
 end
 
 function N:ResolveGuideStep(title,step)
-	local record=registry[title]
-	local char=ensureCharacter()
-	if not record or not char then return step end
-	char.campaignGuideBuilds=char.campaignGuideBuilds or {}
-	if char.campaignGuideBuilds[title]~=record.build then
-		char.campaignGuideBuilds[title]=record.build
-		return 1
-	end
-	return step
+ local record=registry[title]
+ local char=ensureCharacter()
+ if not record or not char then return step end
+ local progress=char.guide_progress and char.guide_progress[title]
+ if progress and progress.source_step_id then
+  step=1
+  for i,native in ipairs(ZGV.CurrentGuide.steps) do
+   if record.steps[native.label]==progress.source_step_id then step=i; break end
+  end
+ end
+ local state=stateFor(record,true)
+ if state and not state.cleaned_future then
+  local native=ZGV.CurrentGuide and ZGV.CurrentGuide.steps[step]
+  local id=native and record.steps[native.label]
+  local position=id and record.step_order[id]
+  if position then
+   for _,passage in ipairs(record.passages) do
+    if record.step_order[passage.at_step]>position then
+     state.delivered[passage.id]=nil; state.pending[passage.id]=nil
+     state.anchors[passage.at_step]=nil
+    end
+   end
+   state.cleaned_future=true
+  end
+ end
+ return step
+end
+
+-- A mixed step's explicit confirmation is redundant once its other goals finish.
+function N:PrepareStep(step)
+ if not focusedRecord or not step or not step.goals then return end
+ local confirm,detected={},false
+ for _,goal in ipairs(step.goals) do
+  if goal.action=='confirm' then confirm[#confirm+1]=goal
+  elseif goal.IsCompleteable and goal:IsCompleteable() and goal.IsVisible and goal:IsVisible() then
+   detected=true
+   if not goal:IsComplete() then return end
+  end
+ end
+ if detected and #confirm>0 then
+  for _,goal in ipairs(confirm) do ZGV.recentlyStickiedGoals[goal]=true end
+ end
+end
+
+function N:Done()
+ local step=ZGV.CurrentStep
+ if not focusedRecord or not step then return end
+ if not ZGV.TryToCompleteStep then return end
+ local original=step.IsComplete
+ step.IsComplete=function() return true,true,false end
+ manualDone=true
+ local ok,err=pcall(ZGV.TryToCompleteStep,ZGV,true)
+ manualDone=false
+ step.IsComplete=original
+ if not ok then self:ReportHookFailure('manual completion',err) end
 end
 
 function N:OnStepCompleted(guide,step,complete)
-	if not complete or not guide or not step then return end
+	if not complete then observedIncomplete=true; return end
+	if not (observedIncomplete or manualDone) or not guide or not step then return end
 	if step.AreRequirementsMet and not step:AreRequirementsMet() then return end
 	local record=registry[guide.title]
 	if not record then return end
@@ -874,7 +915,13 @@ function N:OnStepCompleted(guide,step,complete)
 	local state=stateFor(record,true)
 	if not state or state.anchors[source_id] then return end
 	state.anchors[source_id]=true
-	evaluateRecord(record,state)
+	if manualDone then
+		for _,passage in ipairs(record.by_anchor[source_id]) do
+			if not state.delivered[passage.id] then state.pending[passage.id]=passage.revision end
+		end
+	else
+		evaluateRecord(record,state)
+	end
 	self:RefreshCue()
 	self:MaybeAutoPresent()
 end
@@ -980,8 +1027,7 @@ function N:Cycle(delta)
 		if item.passage.id==readerEntry.id then index=position; break end
 	end
 	index=(index or #list)+((delta or 1)<0 and -1 or 1)
-	if index<1 then index=#list end
-	if index>#list then index=1 end
+	if index<1 or index>#list then return nil end
 	local entry=entryFor(readerRecord,list[index])
 	if self:Present(entry) then return entry end
 	return nil
@@ -1067,6 +1113,8 @@ function N:HandleFrameCommand(input)
 end
 
 if type(SlashCmdList)=='table' then
+	SLASH_JOURNEY1='/journey'
+	SlashCmdList.JOURNEY=function(input) if (input or ''):match('^%s*done%s*$') then N:Done() end end
 	SLASH_WSAFRAME1='/wsaframe'
 	SlashCmdList.WSAFRAME=function(input) N:HandleFrameCommand(input) end
 end
