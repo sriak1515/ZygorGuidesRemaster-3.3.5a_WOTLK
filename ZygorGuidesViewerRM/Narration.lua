@@ -1038,6 +1038,9 @@ function N:Close()
 	if type(ui)=='table' and ui.reader then ui.reader:Hide() end
 end
 
+function N:GetReportInternals()
+ return focusedRecord,focusedPosition,not not manualDone,type(ui)=='table' and ui.reader or nil,readerEntry
+end
 function N:GetReaderEntry() return readerEntry end
 function N:IsReaderShown()
 	return type(ui)=='table' and ui.reader and ui.reader.IsShown and ui.reader:IsShown() or false
