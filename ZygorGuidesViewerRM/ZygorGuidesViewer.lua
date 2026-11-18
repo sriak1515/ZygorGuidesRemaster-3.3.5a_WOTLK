@@ -4486,6 +4486,7 @@ function me:FocusStep(num,quiet)
 	end
 	--self:UpdateMinimapArrow(true)
 
+	if self.CampaignNarration then self.CampaignNarration:PrepareStep(self.CurrentStep) end
 	local stepcomplete,steppossible,stepmanual = self.CurrentStep:IsComplete()
 	if self.pause then
 		if (self.db.profile.skipimpossible and not steppossible and not stepmanual)
