@@ -23,9 +23,9 @@ local REMASTER_LAYOUT = {
 	MIN_STEP_HEIGHT = 18,
 	LINE_HEIGHT = 14,
 	ICON_SIZE = 16,
-	SECTION_FONT = (ZGV.GetRemasterFont and ZGV:GetRemasterFont("section")) or STANDARD_TEXT_FONT,
+	SECTION_FONT = "Fonts\\MORPHEUS.TTF",
 	SECTION_FONT_SIZE = 13,
-	LINE_FONT = (ZGV.GetRemasterFont and ZGV:GetRemasterFont("body")) or STANDARD_TEXT_FONT,
+	LINE_FONT = "Fonts\\FRIZQT__.TTF",
 	LINE_FONT_SIZE = 11,
 }
 
@@ -106,7 +106,7 @@ local function ApplyLineLayout(line, layout, useRemaster)
 
 	if line.back and useRemaster then
 		line.back:SetTexture("Interface\\Buttons\\white8x8")
-		line.back:SetVertexColor(0.12, 0.14, 0.18, 0.55)
+		line.back:SetVertexColor(0, 0, 0, 0)
 	end
 end
 
@@ -152,13 +152,13 @@ function ZGV:ApplyFrameLayout()
 					tileSize = 16,
 					insets = { left = 2, right = 2, top = 2, bottom = 2 },
 				})
-				step:SetBackdropColor(0.08, 0.09, 0.12, 0.6)
+				step:SetBackdropColor(0, 0, 0, 0)
 				if step.border then
 					step.border:SetBackdrop({
 						edgeFile = "Interface\\Buttons\\white8x8",
 						edgeSize = 1,
 					})
-					step.border:SetBackdropBorderColor(0.2, 0.22, 0.26, 0.8)
+					step.border:SetBackdropBorderColor(0, 0, 0, 0)
 				end
 			end
 		end

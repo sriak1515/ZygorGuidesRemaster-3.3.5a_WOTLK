@@ -1278,6 +1278,14 @@ ZGV.STEPMARGIN_Y=4
 ZGV.MIN_STEP_HEIGHT=15
 
 local FONT = STANDARD_TEXT_FONT
+
+-- Recolor display markup without changing goal data or its embedded links/icons.
+local function vellumText(text)
+	return (text:gsub("|c%x%x%x%x%x%x%x%x", function(code)
+		if code:lower() == "|cffbbffbb" then return "|cff2f5f2a" end
+		return "|cff2c1f10"
+	end))
+end
 ZGV.BUTTONS_INLINE=true
 local cos, sin, rad, deg = math.cos, math.sin, math.rad, math.deg
 local atan2 = math.atan2
@@ -2931,6 +2939,10 @@ end
 function me:ApplyGuideLineLabelLayout(lineframe)
 	if not lineframe or not lineframe.label then return end
 	local label = lineframe.label
+	if self:IsRemasterSkin() then
+		label:SetTextColor(44/255,31/255,16/255,1)
+		label:SetShadowOffset(0,0)
+	end
 	local x = lineframe.labelOffsetX or ZGV.ICON_INDENT
 	local y = lineframe.labelOffsetY or 0
 	local rightInset = 0
@@ -3229,7 +3241,7 @@ function me:UpdateRemasterHeader()
 			pcall(titleFS.SetText, titleFS, text or "")
 		end
 
-		local maxWidth = math.max(80, (header:GetWidth() or 0) - 70)
+		local maxWidth = math.max(80, (header:GetWidth() or 0) - 140)
 		titleFS:ClearAllPoints()
 		titleFS:SetPoint("CENTER", header, "CENTER", 0, 0)
 		titleFS:SetJustifyH("CENTER")
@@ -3557,20 +3569,15 @@ function me:EnsureRemasterFrames()
 	local title = header:CreateFontString(nil, "ARTWORK")
 	title:SetPoint("LEFT", header, "LEFT", 8, 0)
 	title:SetJustifyH("LEFT")
-	title:SetTextColor(0.92, 0.94, 0.98, 1)
-	if not safeSetRemasterFont(title, ZGV.DIR.."\\Skins\\segoeuib.ttf", 13)
-		and not safeSetRemasterFont(title, ZGV.DIR.."\\Skins\\segoeui.ttf", 13) then
-		safeSetFont(title, STANDARD_TEXT_FONT, 13)
-	end
+	title:SetTextColor(90/255, 43/255, 11/255, 1)
+	safeSetFont(title, "Fonts\\MORPHEUS.TTF", 13)
 	frames.headerTitle = title
 
 	local meta = header:CreateFontString(nil, "ARTWORK")
 	meta:SetPoint("RIGHT", header, "RIGHT", -10, 0)
 	meta:SetJustifyH("RIGHT")
-	meta:SetTextColor(0.70, 0.75, 0.85, 1)
-	if not safeSetRemasterFont(meta, ZGV.DIR.."\\Skins\\segoeui.ttf", 11) then
-		safeSetFont(meta, STANDARD_TEXT_FONT, 11)
-	end
+	meta:SetTextColor(86/255, 68/255, 44/255, 1)
+	safeSetFont(meta, "Fonts\\FRIZQT__.TTF", 11)
 	frames.headerMeta = meta
 
 	local function styleButton(button, text, w, h)
@@ -3601,19 +3608,8 @@ function me:EnsureRemasterFrames()
 		end)
 	end
 	local function styleCompositeButton(button, textureName)
-		button:SetText("")
-		local darkDir = "Interface\\AddOns\\"..(addonName or "ZygorGuidesViewer").."\\Skin\\rm_dark\\"
-		if not button.rmDarkBG then
-			button.rmDarkBG = button:CreateTexture(nil, "BACKGROUND")
-			button.rmDarkBG:SetAllPoints(button)
-		end
-		button.rmDarkBG:SetTexture(nil)
-		if not button.rmDarkArrow then
-			button.rmDarkArrow = button:CreateTexture(nil, "ARTWORK")
-			button.rmDarkArrow:SetAllPoints(button)
-		end
-		button.rmDarkArrow:SetTexture(darkDir..textureName)
-		button.rmDarkArrow:SetBlendMode("BLEND")
+		local glyphs = { ["LeftArrow-WithBG"]="<", ["RightArrow-WithBG"]=">", ["X-WithBG"]="X", ["Gear-WithBG"]="S", ["Menu-WithBG"]="M", ["Unlocked-Lock-WithBG"]="U" }
+		button:SetText(glyphs[textureName] or "")
 	end
 	local function tipColor()
 		local probe = L and (L['frame_stepnav_prev_click'] or L['frame_stepnav_next_click'])
@@ -3708,10 +3704,8 @@ function me:EnsureRemasterFrames()
 	local stepLabel = toolbar:CreateFontString(nil, "ARTWORK")
 	stepLabel:SetPoint("LEFT", nextButton, "RIGHT", 8, 0)
 	stepLabel:SetJustifyH("LEFT")
-	stepLabel:SetTextColor(0.78, 0.82, 0.9, 1)
-	if not safeSetRemasterFont(stepLabel, ZGV.DIR.."\\Skins\\segoeui.ttf", 11) then
-		safeSetFont(stepLabel, STANDARD_TEXT_FONT, 11)
-	end
+	stepLabel:SetTextColor(44/255, 31/255, 16/255, 1)
+	safeSetFont(stepLabel, "Fonts\\FRIZQT__.TTF", 11)
 	frames.stepLabel = stepLabel
 
 	local closeButton = CreateFrame("Button", "ZGVRemasterCloseButton", header)
@@ -4839,12 +4833,7 @@ function me:UpdateLocking()
 		btn:SetNormalTexture(nil)
 		btn:SetPushedTexture(nil)
 		btn:SetHighlightTexture(nil)
-		btn:SetText("")
-		if btn.rmDarkArrow then
-			local darkDir = "Interface\\AddOns\\"..(addonName or "ZygorGuidesViewer").."\\Skin\\rm_dark\\"
-			btn.rmDarkArrow:SetTexture(darkDir..(locked and "Locked-Lock-WithBG" or "Unlocked-Lock-WithBG"))
-			btn.rmDarkArrow:SetBlendMode("BLEND")
-		end
+		btn:SetText(locked and "L" or "U")
 	end
 
 	if self.db.profile["showallsteps"] then
@@ -5204,12 +5193,13 @@ function me:UpdateFrame(full,onupdate,nonsecure_only)
 					local line=1
 					local maxlines = #frame.lines
 
-					if stepdata.requirement or self.db.profile.stepnumbers then
-						local numbertext = self.db.profile.stepnumbers and L['step_num']:format(stepnum)
+					local showNumbers = self.db.profile.stepnumbers and not (self.CampaignNarration and self.CampaignNarration:HasCurrentGuide())
+					if stepdata.requirement or showNumbers then
+						local numbertext = showNumbers and L['step_num']:format(stepnum)
 						local reqraw = stepdata.requirement
 						local reqdisplay = type(reqraw)=="table" and table.concat(reqraw,L["stepreqor"]) or tostring(reqraw)
 						local reqtext = reqraw and ((stepdata:AreRequirementsMet() and "|cff44aa44" or "|cffbb0000") .. "(" .. reqdisplay:gsub("!([a-zA-Z ]+)",L["req_not"]:format("%1")) .. ")")
-						local leveltext = (stepdata.level and stepdata.level>0 and self.db.profile.stepnumbers) and L['step_level']:format(stepdata.level or "?")
+						local leveltext = (stepdata.level and stepdata.level>0 and showNumbers) and L['step_level']:format(stepdata.level or "?")
 
 						frame.lines[line].labelOffsetX = 0
 						frame.lines[line].labelOffsetY = 0
@@ -5217,13 +5207,13 @@ function me:UpdateFrame(full,onupdate,nonsecure_only)
 						frame.lines[line].label:SetText((numbertext or "")..(leveltext or "")..(reqtext or ""))
 						--frame.lines[line].label:SetMultilineIndent(1)
 						frame.lines[line].goal = nil
-						frame.lines[line].label:SetFont(FONT,round(self.db.profile.fontsecsize))
+						frame.lines[line].label:SetFont(self:IsRemasterSkin() and "Fonts\\FRIZQT__.TTF" or FONT,round(self.db.profile.fontsecsize))
 						line=line+1
 					else
 						frame.lines[line].labelOffsetX = ZGV.ICON_INDENT
 						frame.lines[line].labelOffsetY = 0
 						self:ApplyGuideLineLabelLayout(frame.lines[line])
-						frame.lines[line].label:SetFont(FONT,self.db.profile.fontsize)
+						frame.lines[line].label:SetFont(self:IsRemasterSkin() and "Fonts\\FRIZQT__.TTF" or FONT,self.db.profile.fontsize)
 					end
 
 					if stepdata:AreRequirementsMet() or self.db.profile.showwrongsteps then
@@ -5267,8 +5257,8 @@ function me:UpdateFrame(full,onupdate,nonsecure_only)
 										frame.lines[line].labelOffsetX = ZGV.ICON_INDENT
 										frame.lines[line].labelOffsetY = 2
 										self:ApplyGuideLineLabelLayout(frame.lines[line])
-										frame.lines[line].label:SetFont(FONT,round(self.db.profile.fontsecsize))
-										frame.lines[line].label:SetText(indent.."|cffeeeecc"..goal.info.."|r")
+										frame.lines[line].label:SetFont(self:IsRemasterSkin() and "Fonts\\FRIZQT__.TTF" or FONT,round(self.db.profile.fontsecsize))
+										frame.lines[line].label:SetText(indent..(self:IsRemasterSkin() and "|cff56442c" or "|cffeeeecc")..goal.info.."|r")
 										frame.lines[line].goal = nil
 									else
 										local link = ((effective_tip and not self.db.profile.tooltipsbelow) or (goal.x and not self.db.profile.windowlocked) or goal.image) and " |cffdd44ff*|r" or ""
@@ -5276,8 +5266,8 @@ function me:UpdateFrame(full,onupdate,nonsecure_only)
 										frame.lines[line].labelOffsetX = ZGV.ICON_INDENT
 										frame.lines[line].labelOffsetY = 0
 										self:ApplyGuideLineLabelLayout(frame.lines[line])
-										frame.lines[line].label:SetFont(FONT,self.db.profile.fontsize)
-										frame.lines[line].label:SetText(indent..goaltxt..link)
+										frame.lines[line].label:SetFont(self:IsRemasterSkin() and "Fonts\\FRIZQT__.TTF" or FONT,self.db.profile.fontsize)
+										frame.lines[line].label:SetText(indent..(self:IsRemasterSkin() and vellumText(goaltxt..link) or goaltxt..link))
 										frame.lines[line].goal = goal
 									end
 									line=line+1
@@ -5288,8 +5278,8 @@ function me:UpdateFrame(full,onupdate,nonsecure_only)
 										frame.lines[line].labelOffsetX = ZGV.ICON_INDENT
 										frame.lines[line].labelOffsetY = 2
 										self:ApplyGuideLineLabelLayout(frame.lines[line])
-										frame.lines[line].label:SetFont(FONT,round(self.db.profile.fontsecsize))
-										frame.lines[line].label:SetText(indent.."|cffeeeecc"..effective_tip.."|r")
+										frame.lines[line].label:SetFont(self:IsRemasterSkin() and "Fonts\\FRIZQT__.TTF" or FONT,round(self.db.profile.fontsecsize))
+										frame.lines[line].label:SetText(indent..(self:IsRemasterSkin() and "|cff56442c" or "|cffeeeecc")..effective_tip.."|r")
 										--frame.lines[line].label:SetMultilineIndent(1)
 										frame.lines[line].goal = nil
 										line=line+1
@@ -5300,7 +5290,7 @@ function me:UpdateFrame(full,onupdate,nonsecure_only)
 								-- not anymore
 								--[[
 								if goal.orlogic and i<#stepdata.goals and stepdata.goals[i+1].orlogic then
-									frame.lines[line].label:SetFont(FONT,round(self.db.profile.fontsecsize))
+									frame.lines[line].label:SetFont(self:IsRemasterSkin() and "Fonts\\FRIZQT__.TTF" or FONT,round(self.db.profile.fontsecsize))
 									frame.lines[line].label:SetText(indent.."|cffeeeecc"..L['stepgoal_or'].."|r")
 									--frame.lines[line].label:SetMultilineIndent(1)
 									frame.lines[line].goal = nil
@@ -5316,7 +5306,7 @@ function me:UpdateFrame(full,onupdate,nonsecure_only)
 						if stepdata.info then
 							frame.lines[line].label:SetText("|cffeeeecc"..stepdata.info.."|r")
 							--frame.lines[line].label:SetMultilineIndent(0)
-							frame.lines[line].label:SetFont(FONT,self.db.profile.fontsize)
+							frame.lines[line].label:SetFont(self:IsRemasterSkin() and "Fonts\\FRIZQT__.TTF" or FONT,self.db.profile.fontsize)
 							frame.lines[line].goal = nil
 							line=line+1
 						end
@@ -5517,6 +5507,10 @@ function me:UpdateFrame(full,onupdate,nonsecure_only)
 						frame.border:SetBackdropBorderColor(inc.r,inc.g,inc.b,0.5)
 					end
 
+					if self:IsRemasterSkin() then
+						frame:SetBackdropColor(0,0,0,0)
+						frame.border:SetBackdropBorderColor(0,0,0,0)
+					end
 					if self.db.profile.hidestepborders then
 						frame.border:Hide()
 					else
@@ -5707,7 +5701,7 @@ function me:UpdateFrame(full,onupdate,nonsecure_only)
 
 				assert(frame.lines[line],"Out of lines ("..line..") in spot frame "..spotbuttonnum)
 
-				frame.lines[line].label:SetFont(FONT,round(self.db.profile.fontsize))
+				frame.lines[line].label:SetFont(self:IsRemasterSkin() and "Fonts\\FRIZQT__.TTF" or FONT,round(self.db.profile.fontsize))
 				
 				-- cardinal names
 				--frame.lines[line].label:SetText(("|cffffbb00%s|r (%s %s)"):format(spotdata.title or "?",ZGV.FormatDistance(spotdata.waypoint.minimapFrame.dist),GetCardinalDirName(Astrolabe:GetDirectionToIcon(spotdata.waypoint.minimapFrame))))
@@ -5721,13 +5715,13 @@ function me:UpdateFrame(full,onupdate,nonsecure_only)
 				line=line+1
 
 				--[[
-				frame.lines[line].label:SetFont(FONT,round(self.db.profile.fontsize))
+				frame.lines[line].label:SetFont(self:IsRemasterSkin() and "Fonts\\FRIZQT__.TTF" or FONT,round(self.db.profile.fontsize))
 				frame.lines[line].label:SetText(("|cffffff00%s %s,%s|r"):format(spotdata.map,spotdata.x,spotdata.y))
 				line=line+1
 				--]]
 
 				if (spotdata.desc) then
-					frame.lines[line].label:SetFont(FONT,round(self.db.profile.fontsize))
+					frame.lines[line].label:SetFont(self:IsRemasterSkin() and "Fonts\\FRIZQT__.TTF" or FONT,round(self.db.profile.fontsize))
 					frame.lines[line].label:SetText(("%s"):format(spotdata.desc))
 					line=line+1
 				end
@@ -5764,7 +5758,7 @@ function me:UpdateFrame(full,onupdate,nonsecure_only)
 							end
 
 							if #str>0 then
-								frame.lines[line].label:SetFont(FONT,round(self.db.profile.fontsize))
+								frame.lines[line].label:SetFont(self:IsRemasterSkin() and "Fonts\\FRIZQT__.TTF" or FONT,round(self.db.profile.fontsize))
 								--frame.lines[line].label:SetText("<html><body><p>"..("|cffdddd66%s |r%s"):format(header,str).."</p></body></html>")
 								frame.lines[line].label:SetText(("|cffdddd66%s |r%s"):format(header,str))
 								line=line+1
@@ -5779,7 +5773,7 @@ function me:UpdateFrame(full,onupdate,nonsecure_only)
 							end
 
 							if #goodobjs then
-								frame.lines[line].label:SetFont(FONT,round(self.db.profile.fontsize))
+								frame.lines[line].label:SetFont(self:IsRemasterSkin() and "Fonts\\FRIZQT__.TTF" or FONT,round(self.db.profile.fontsize))
 								--frame.lines[line].label:SetText("<html><body><p>"..("|cffdddd66%s |r%s"):format(header,str).."</p></body></html>")
 								frame.lines[line].label:SetText(("|cffdddd66%s|r"):format(L['gold_header_'..source]:format(mobtext or "mob")))
 								line=line+1
@@ -5794,7 +5788,7 @@ function me:UpdateFrame(full,onupdate,nonsecure_only)
 
 									if obj.toohard then str = "|cffff0000"..str.."|r" end
 
-									frame.lines[line].label:SetFont(FONT,round(self.db.profile.fontsize*1.0))
+									frame.lines[line].label:SetFont(self:IsRemasterSkin() and "Fonts\\FRIZQT__.TTF" or FONT,round(self.db.profile.fontsize*1.0))
 									frame.lines[line].label:SetText(str)
 									frame.lines[line].label:SetHyperlinksEnabled(false)
 									frame.lines[line].label.reenableHyperlinks=true
@@ -6469,6 +6463,8 @@ function me:UpdateFrameCurrent(nonsecure_only)
 				
 				end
 
+				if self:IsRemasterSkin() then back:SetVertexColor(0,0,0,0) end
+
 				local iconsize = math.max(self.db.profile.fontsize * 1.45, 15)
 				if self.db
 				and self.db.profile
@@ -7030,6 +7026,7 @@ function me:ApplyRemasterSkin(visualOnly)
 		return
 	end
 	local remasterFrames = self:EnsureRemasterFrames()
+	if self.CampaignNarration then self.CampaignNarration:RefreshCue() end
 	if not visualOnly then
 		local compactMetrics = self:GetCompactGuideLayoutMetrics()
 		local compactGuide = self.db
@@ -7174,21 +7171,29 @@ function me:ApplyRemasterSkin(visualOnly)
 			textPrimary = { 0.86, 0.86, 0.88, 1.00 },
 			textMeta = { 0.72, 0.72, 0.75, 0.90 },
 		}
+		-- The Journey surface is a single opaque vellum sheet.
+		theme = {
+			frameBorder={134/255,104/255,60/255,1},
+			frameLight={210/255,188/255,146/255,0},
+			insetBg={210/255,188/255,146/255,0}, insetBorder={0,0,0,0},
+			buttonBack={210/255,188/255,146/255,1}, buttonHover={0.76,0.67,0.50,1},
+			buttonBorder={134/255,104/255,60/255,1}, separator={50/255,32/255,10/255,0.28},
+			textPrimary={90/255,43/255,11/255,1}, textMeta={86/255,68/255,44/255,1},
+		}
 		local skinData = ZGV:GetCurrentSkin()
 		local currentVariantId = ZGV:GetCurrentVariant()
-		local currentVariantData = skinData and skinData.variants and skinData.variants[currentVariantId]
+		local currentVariantData = nil -- keep saved variants from adding shaded overlays
 		if remasterFrames.root then
-			remasterFrames.root:SetAlpha(opacitymain)
-			local rootc = (currentVariantData and currentVariantData.rootBackOverride) or backc
-			remasterFrames.root:SetBackdropColor(rootc[1], rootc[2], rootc[3], backalpha)
-			local rootBorderAlpha = (backalpha <= 0.005) and 0 or (theme.frameBorder[4] or 1)
+			remasterFrames.root:SetAlpha(1)
+			remasterFrames.root:SetBackdropColor(210/255,188/255,146/255,1)
+			local rootBorderAlpha = 1
 			remasterFrames.root:SetBackdropBorderColor(theme.frameBorder[1], theme.frameBorder[2], theme.frameBorder[3], rootBorderAlpha)
 		end
 		if remasterFrames.content then
 			local ib = theme.insetBg or backc
-			local ia = math.min(1, (theme.insetBg[4] or 0.95) * (backalpha / 0.3))
+			local ia = 0
 			remasterFrames.content:SetBackdropColor(ib[1], ib[2], ib[3], ia)
-			local contentBorderAlpha = (backalpha <= 0.005) and 0 or (theme.insetBorder[4] or 1)
+			local contentBorderAlpha = 0
 			remasterFrames.content:SetBackdropBorderColor(theme.insetBorder[1], theme.insetBorder[2], theme.insetBorder[3], contentBorderAlpha)
 		end
 		if remasterFrames.headerBg then
@@ -7209,16 +7214,18 @@ function me:ApplyRemasterSkin(visualOnly)
 				setTexColor(remasterFrames.toolbarBg, c[1], c[2], c[3], (c[4] or 1) * 0.8)
 			end
 		end
+		if remasterFrames.footerBg then setTexColor(remasterFrames.footerBg,0,0,0,0) end
+		if remasterFrames.footerSeparator then setTexColor(remasterFrames.footerSeparator,50/255,32/255,10/255,0.28) end
 		if remasterFrames.separator then
 			local c = theme.separator or theme.frameBorder
 			setTexColor(remasterFrames.separator, c[1], c[2], c[3], c[4] or 1)
 		end
 		if remasterFrames.headerTitle then
-			local c = theme.textPrimary or textc
+			local c = {90/255,43/255,11/255,1}
 			remasterFrames.headerTitle:SetTextColor(c[1], c[2], c[3], c[4] or 1)
 		end
 		if remasterFrames.headerMeta then
-			local c = theme.textMeta or textc
+			local c = {86/255,68/255,44/255,1}
 			remasterFrames.headerMeta:SetTextColor(c[1], c[2], c[3], c[4] or 0.85)
 		end
 		if remasterFrames.stepLabel then
@@ -7227,6 +7234,13 @@ function me:ApplyRemasterSkin(visualOnly)
 		end
 		local function applyButtonTheme(button)
 			if not button then return end
+			local text = button:GetFontString()
+			if text then text:SetFont("Fonts\\FRIZQT__.TTF",11) text:SetTextColor(44/255,31/255,16/255,1) text:SetShadowOffset(0,0) end
+			if not button.vellumHoverHook then
+				button:HookScript("OnEnter", function(b) local c=b.remasterHoverColor; if c then b:SetBackdropColor(unpack(c)) end end)
+				button:HookScript("OnLeave", function(b) local c=b.remasterBackColor; if c then b:SetBackdropColor(unpack(c)) end end)
+				button.vellumHoverHook = true
+			end
 			button.remasterBackColor = theme.buttonBack
 			button.remasterHoverColor = theme.buttonHover
 			button.remasterBorderColor = theme.buttonBorder

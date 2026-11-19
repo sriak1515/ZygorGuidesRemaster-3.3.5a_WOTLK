@@ -452,9 +452,7 @@ end
 
 local function makeWidget(kind,parent)
 	if type(CreateFrame)~='function' then return nil end
-	local ok,frame=pcall(CreateFrame,kind,nil,parent or UIParent)
-	if not ok then return nil end
-	return frame
+	return CreateFrame(kind,nil,parent or UIParent)
 end
 
 local function fontPath()
@@ -469,7 +467,7 @@ local function readerFontSize()
 end
 
 local function applyReaderFont(reader)
-	reader.body:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF',readerFontSize())
+	reader.body:SetFont('Fonts\\FRIZQT__.TTF',readerFontSize())
 	if reader.updateScrollChild then reader.updateScrollChild() end
 	local scroll=reader.scroll
 	if scroll then
@@ -492,7 +490,10 @@ end
 local function addButton(parent,label,callback)
 	local button=makeWidget('Button',parent)
 	if not button then return nil end
-	button:SetSize(24,24)
+	button:SetSize(24,20)
+	button:SetBackdrop({bgFile='Interface\\Buttons\\white8x8',edgeFile='Interface\\Buttons\\white8x8',edgeSize=1,insets={left=1,right=1,top=1,bottom=1}})
+	button:SetBackdropColor(210/255,188/255,146/255,1)
+	button:SetBackdropBorderColor(134/255,104/255,60/255,1)
 	local text=button:CreateFontString(nil,'ARTWORK')
 	text:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF',20)
 	text:SetTextColor(90/255,43/255,11/255)
@@ -501,9 +502,9 @@ local function addButton(parent,label,callback)
 	text:SetText(label)
 	button.label=text
 	button:SetScript('OnEnter',function(self)
-		if self:IsEnabled() then text:SetTextColor(44/255,31/255,16/255) end
+		if self:IsEnabled() then self:SetBackdropColor(0.76,0.67,0.50,1); text:SetTextColor(44/255,31/255,16/255) end
 	end)
-	button:SetScript('OnLeave',function() text:SetTextColor(90/255,43/255,11/255) end)
+	button:SetScript('OnLeave',function(self) self:SetBackdropColor(210/255,188/255,146/255,1); text:SetTextColor(90/255,43/255,11/255) end)
 	button:SetScript('OnClick',function() callback() end)
 	return button
 end
@@ -522,9 +523,21 @@ local function restoreReaderGeometry(reader)
 	local char=ZGV.db and ZGV.db.char
 	local saved=char and char.campaignNarrationReader
 	reader:ClearAllPoints()
-	reader:SetPoint('CENTER',UIParent,'CENTER',0,60)
 	reader:SetSize(520,340)
-	if type(saved)~='table' then return end
+	if type(saved)~='table' then
+		local journey=ZGV.Frame
+		local left,right=journey and journey:GetLeft(),journey and journey:GetRight()
+		local screenLeft,screenRight=UIParent:GetLeft(),UIParent:GetRight()
+		if left and right and screenLeft and screenRight then
+			if screenRight-right>=left-screenLeft then
+				reader:SetPoint('TOPLEFT',journey,'TOPRIGHT',12,0)
+			else
+				reader:SetPoint('TOPRIGHT',journey,'TOPLEFT',-12,0)
+			end
+		else reader:SetPoint('CENTER',UIParent,'CENTER',0,60) end
+		return
+	end
+	reader:SetPoint('CENTER',UIParent,'CENTER',0,60)
 	for _,key in ipairs({'x','y','width','height'}) do
 		local value=saved[key]
 		if type(value)~='number' or value~=value or value==huge or value==-huge then return end
@@ -556,9 +569,21 @@ local function shadeEdges(parent,outside)
 	end
 end
 
+local function anchorCue(cue)
+	local remaster=ZGV.IsRemasterSkin and ZGV:IsRemasterSkin()
+	local frames=ZGV.RemasterFrames
+	local bar=remaster and frames and frames.header or (not remaster and (_G.ZygorGuidesViewerFrame_Border_TitleBar or ZGV.Frame))
+	if not bar then return end
+	cue:SetParent(bar)
+	cue:ClearAllPoints()
+	if remaster and frames.closeButton then
+		cue:SetPoint('RIGHT',frames.closeButton,'LEFT',-6,0)
+	else cue:SetPoint('TOPLEFT',bar,'TOPLEFT',6,-6) end
+end
+
 local function ensureUI()
 	if ui==false then return nil end
-	if type(ui)=='table' then return ui end
+	if type(ui)=='table' then anchorCue(ui.cue); return ui end
 	if type(CreateFrame)~='function' or not UIParent then
 		ui=false
 		return nil
@@ -567,22 +592,33 @@ local function ensureUI()
 	-- UIParent if metadata loads before AceAddon OnInitialize has assigned it.
 	if not ZGV.Frame then return nil end
 	local ok,cue,reader=pcall(function()
-		local bar=_G.ZygorGuidesViewerFrame_Border_TitleBar or ZGV.Frame
-		local cue=makeWidget('Button',bar)
+		local cue=makeWidget('Button',ZGV.Frame)
 		if not cue then error('cue') end
 		cue:SetSize(28,20)
-		cue:SetPoint('TOPLEFT',bar,'TOPLEFT',6,-6)
+		anchorCue(cue)
 		if cue.SetBackdrop then
 			cue:SetBackdrop({bgFile='Interface\\Buttons\\white8x8',edgeFile='Interface\\Buttons\\white8x8',tile=true,tileSize=8,edgeSize=1,insets={left=1,right=1,top=1,bottom=1}})
-			cue:SetBackdropColor(0.05,0.05,0.07,0.90)
-			cue:SetBackdropBorderColor(0.45,0.38,0.22,1)
+			cue:SetBackdropColor(210/255,188/255,146/255,1)
+			cue:SetBackdropBorderColor(134/255,104/255,60/255,1)
 		end
-		local label=cue:CreateFontString(nil,'ARTWORK')
-		if not label then error('label') end
-		label:SetFont(fontPath(),12)
-		label:SetPoint('CENTER',cue,'CENTER',0,0)
-		label:SetText('|TInterface\\Icons\\INV_Misc_Book_09:18|t')
-		cue.label=label
+		local icon=cue:CreateTexture(nil,'ARTWORK')
+		icon:SetSize(18,18)
+		icon:SetPoint('CENTER',cue,'CENTER',0,0)
+		icon:SetTexture('Interface\\Icons\\INV_Misc_Book_09')
+		cue.icon=icon
+		cue.label=icon -- Keep the existing offline replay locator.
+		cue:SetScript('OnEnter',function(self)
+			if self:IsEnabled() then self:SetBackdropColor(0.76,0.67,0.50,1) end
+			GameTooltip:SetOwner(self,'ANCHOR_TOP')
+			GameTooltip:SetText('Story')
+			GameTooltip:AddLine((self.delivered or 0)..' / '..(self.total or 0)..' delivered')
+			GameTooltip:Show()
+		end)
+		cue:SetScript('OnLeave',function(self)
+			self:SetBackdropColor(210/255,188/255,146/255,1)
+			GameTooltip:Hide()
+		end)
+		cue:EnableMouse(true)
 		cue:RegisterForClicks('LeftButtonUp')
 		cue:SetScript('OnClick',function(_,button)
 			if type(InCombatLockdown)=='function' and InCombatLockdown() then return end
@@ -633,8 +669,6 @@ local function ensureUI()
 			reader:SetBackdropColor(210/255,188/255,146/255,1)
 			reader:SetBackdropBorderColor(134/255,104/255,60/255,1)
 		end
-		shadeEdges(reader,true)
-		shadeEdges(reader,false)
 		local title=addText(reader,22,-18)
 		title:SetJustifyH('LEFT')
 		local scroll=makeWidget('ScrollFrame',reader)
@@ -657,7 +691,7 @@ local function ensureUI()
 		scroll:SetScrollChild(child)
 		local body=child:CreateFontString(nil,'ARTWORK')
 		if not body then error('body') end
-		body:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF',16)
+		body:SetFont('Fonts\\FRIZQT__.TTF',16)
 		body:SetTextColor(44/255,31/255,16/255)
 		body:SetShadowOffset(0,0)
 		body:SetPoint('TOPLEFT',child,'TOPLEFT',0,0)
@@ -684,18 +718,13 @@ local function ensureUI()
 		scroll:SetScript('OnSizeChanged',updateScrollChild)
 		local close=addButton(reader,'×',function() N:Close() end)
 		close:SetPoint('TOPRIGHT',reader,'TOPRIGHT',-16,-18)
-		local earlier=addButton(reader,'‹',function() N:Cycle(-1) end)
-		local later=addButton(reader,'›',function() N:Cycle(1) end)
+		local earlier=addButton(reader,'<',function() N:Cycle(-1) end)
+		local later=addButton(reader,'>',function() N:Cycle(1) end)
 		earlier:SetPoint('BOTTOMRIGHT',reader,'BOTTOMRIGHT',-66,14)
 		later:SetPoint('BOTTOMRIGHT',reader,'BOTTOMRIGHT',-34,14)
 		local grip=makeWidget('Button',reader)
 		grip:SetSize(18,18)
 		grip:SetPoint('BOTTOMRIGHT',reader,'BOTTOMRIGHT',-3,3)
-		local gripText=grip:CreateFontString(nil,'ARTWORK')
-		gripText:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF',16)
-		gripText:SetTextColor(86/255,68/255,44/255)
-		gripText:SetPoint('CENTER',grip,'CENTER',0,0)
-		gripText:SetText('/')
 		grip:SetScript('OnMouseDown',function(_,button)
 			if button=='LeftButton' then reader:StartSizing('BOTTOMRIGHT') end
 		end)
@@ -718,9 +747,11 @@ local function ensureUI()
 	end)
 	if not ok then
 		ui=false
+		if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage('Story UI error: '..tostring(cue)) end
 		return nil
 	end
 	ui={cue=cue,reader=reader}
+	N.storyButton=cue
 	return ui
 end
 
@@ -766,22 +797,21 @@ function N:RefreshCue()
 	local widgets=ensureUI()
 	if not widgets then return end
 	local record=currentRecord()
-	local state=record and stateFor(record,false)
-	if not record or not state then
+	if not record then
 		widgets.cue:Hide()
 		return
 	end
-	local list=ordered(record,state)
-	if #list==0 then
-		widgets.cue:Hide()
-		return
+	local state=stateFor(record,false)
+	local delivered=0
+	for _,passage in ipairs(record.passages) do
+		if state and state.delivered[passage.id]==passage.revision then delivered=delivered+1 end
 	end
-	local pending=0
-	for _,item in ipairs(list) do
-		if item.status=='pending' then pending=pending+1 end
-	end
-
-	widgets.cue:Show()
+	local cue=widgets.cue
+	cue.delivered,cue.total=delivered,#record.passages
+	if delivered>0 then cue:Enable() else cue:Disable() end
+	cue.icon:SetDesaturated(delivered==0)
+	cue:SetAlpha(delivered>0 and 1 or 0.5)
+	cue:Show()
 end
 
 function N:CanAutoPresent(entry)
@@ -940,6 +970,8 @@ function N:OnCombatEnded()
 	self:RefreshCue()
 	self:MaybeAutoPresent()
 end
+
+function N:HasCurrentGuide() return currentRecord()~=nil end
 
 function N:GetStatus(registration)
 	local record=registration and registry[registration] or currentRecord()

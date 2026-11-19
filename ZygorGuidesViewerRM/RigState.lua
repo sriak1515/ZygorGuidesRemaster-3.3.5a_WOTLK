@@ -5,6 +5,7 @@ function ZygorRigState()
  local n=z.CampaignNarration
  local record,position,manual,reader,entry
  if n then record,position,manual,reader,entry=n:GetReportInternals() end
+ local button=n and n.storyButton
  local char=z.db and z.db.char
  local progress=char and char.guide_progress and char.guide_progress[z.CurrentGuideName or '']
  local saved=char and char.campaignNarration
@@ -40,6 +41,7 @@ function ZygorRigState()
  end
  return {screen_height=GetScreenHeight()*UIParent:GetEffectiveScale(),guide_id=record and record.guide_id or (guide and guide.title),guide_title=guide and guide.title,
   step_count=guide and guide.steps and #guide.steps or 0,step_index=z.CurrentStepNum,
+  story_button={shown=not not (button and button:IsShown()),visible=not not (button and button:IsVisible()),enabled=not not (button and button:IsEnabled())},
   step_indicator=z.RemasterFrames and z.RemasterFrames.stepLabel and z.RemasterFrames.stepLabel:GetText(),
   step_id=position or (step and step.label),saved_step_id=progress and progress.source_step_id,
   journey_done_transient=not not manual,goals=goals,unlocked_passage_ids=passages,
