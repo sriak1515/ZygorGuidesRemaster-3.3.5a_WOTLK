@@ -46,6 +46,7 @@
 	<Script file="Step.lua"/>
 	<Script file="Goal.lua"/>
 	<Script file="Narration.lua"/>
+	<Script file="Wayfinder.lua"/>
 	<Script file="RigState.lua"/>
 	<Include file="Data\data.xml"/>
 
