@@ -3608,19 +3608,8 @@ function me:EnsureRemasterFrames()
 		end)
 	end
 	local function styleCompositeButton(button, textureName)
-		button:SetText("")
-		local darkDir = "Interface\\AddOns\\"..(addonName or "ZygorGuidesViewer").."\\Skin\\rm_dark\\"
-		if not button.rmDarkBG then
-			button.rmDarkBG = button:CreateTexture(nil, "BACKGROUND")
-			button.rmDarkBG:SetAllPoints(button)
-		end
-		button.rmDarkBG:SetTexture(nil)
-		if not button.rmDarkArrow then
-			button.rmDarkArrow = button:CreateTexture(nil, "ARTWORK")
-			button.rmDarkArrow:SetAllPoints(button)
-		end
-		button.rmDarkArrow:SetTexture(darkDir..textureName)
-		button.rmDarkArrow:SetBlendMode("BLEND")
+		local glyphs = { ["LeftArrow-WithBG"]="<", ["RightArrow-WithBG"]=">", ["X-WithBG"]="X", ["Gear-WithBG"]="S", ["Menu-WithBG"]="M", ["Unlocked-Lock-WithBG"]="U" }
+		button:SetText(glyphs[textureName] or "")
 	end
 	local function tipColor()
 		local probe = L and (L['frame_stepnav_prev_click'] or L['frame_stepnav_next_click'])
@@ -4844,12 +4833,7 @@ function me:UpdateLocking()
 		btn:SetNormalTexture(nil)
 		btn:SetPushedTexture(nil)
 		btn:SetHighlightTexture(nil)
-		btn:SetText("")
-		if btn.rmDarkArrow then
-			local darkDir = "Interface\\AddOns\\"..(addonName or "ZygorGuidesViewer").."\\Skin\\rm_dark\\"
-			btn.rmDarkArrow:SetTexture(darkDir..(locked and "Locked-Lock-WithBG" or "Unlocked-Lock-WithBG"))
-			btn.rmDarkArrow:SetBlendMode("BLEND")
-		end
+		btn:SetText(locked and "L" or "U")
 	end
 
 	if self.db.profile["showallsteps"] then
@@ -5209,12 +5193,13 @@ function me:UpdateFrame(full,onupdate,nonsecure_only)
 					local line=1
 					local maxlines = #frame.lines
 
-					if stepdata.requirement or self.db.profile.stepnumbers then
-						local numbertext = self.db.profile.stepnumbers and L['step_num']:format(stepnum)
+					local showNumbers = self.db.profile.stepnumbers and not (self.CampaignNarration and self.CampaignNarration:HasCurrentGuide())
+					if stepdata.requirement or showNumbers then
+						local numbertext = showNumbers and L['step_num']:format(stepnum)
 						local reqraw = stepdata.requirement
 						local reqdisplay = type(reqraw)=="table" and table.concat(reqraw,L["stepreqor"]) or tostring(reqraw)
 						local reqtext = reqraw and ((stepdata:AreRequirementsMet() and "|cff44aa44" or "|cffbb0000") .. "(" .. reqdisplay:gsub("!([a-zA-Z ]+)",L["req_not"]:format("%1")) .. ")")
-						local leveltext = (stepdata.level and stepdata.level>0 and self.db.profile.stepnumbers) and L['step_level']:format(stepdata.level or "?")
+						local leveltext = (stepdata.level and stepdata.level>0 and showNumbers) and L['step_level']:format(stepdata.level or "?")
 
 						frame.lines[line].labelOffsetX = 0
 						frame.lines[line].labelOffsetY = 0
@@ -7251,6 +7236,11 @@ function me:ApplyRemasterSkin(visualOnly)
 			if not button then return end
 			local text = button:GetFontString()
 			if text then text:SetFont("Fonts\\FRIZQT__.TTF",11) text:SetTextColor(44/255,31/255,16/255,1) text:SetShadowOffset(0,0) end
+			if not button.vellumHoverHook then
+				button:HookScript("OnEnter", function(b) local c=b.remasterHoverColor; if c then b:SetBackdropColor(unpack(c)) end end)
+				button:HookScript("OnLeave", function(b) local c=b.remasterBackColor; if c then b:SetBackdropColor(unpack(c)) end end)
+				button.vellumHoverHook = true
+			end
 			button.remasterBackColor = theme.buttonBack
 			button.remasterHoverColor = theme.buttonHover
 			button.remasterBorderColor = theme.buttonBorder

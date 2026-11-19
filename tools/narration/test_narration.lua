@@ -84,6 +84,7 @@ local function newWidget(kind)
 	function widget:CreateTexture() local child=newWidget('Texture'); child:Show(); return child end
 	function widget:GetAlpha() return rawget(self,'alpha') or 1 end
 	function widget:SetAlpha(value) self.alpha=value end
+	function widget:SetDesaturated(value) self.desaturated=value end
 	function widget:SetSize(width,height)
 		self.width,self.height=width,height
 		if self.scripts.OnSizeChanged then self.scripts.OnSizeChanged(self,width,height) end
@@ -262,7 +263,8 @@ local storyButton=assert(N.storyButton)
 equal(storyButton:GetParent(),remasterHeader,'story parent')
 check(storyButton:IsVisible(),'story parent chain is hidden')
 check(not storyButton:IsEnabled(),'story enabled before delivery')
-equal(storyButton:GetAlpha(),0.4,'story disabled alpha')
+equal(storyButton:GetAlpha(),0.5,'story disabled alpha')
+check(storyButton.icon.desaturated,'story icon not desaturated')
 equal(storyButton.total,2,'story total')
 equal(status().pending,0,'manual jump ahead revealed future narration')
 equal(status().anchors,0,'jump delivered narration')
@@ -289,6 +291,7 @@ equal(N:IsReaderShown(),false,'cue mode unexpectedly opened the reader')
 -- click. Opening is the presentation event.
 local first=N:OpenLatest()
 check(storyButton:IsEnabled(),'story disabled after delivery')
+check(not storyButton.icon.desaturated,'story icon remains desaturated')
 equal(storyButton.delivered,1,'story delivered count')
 check(first and first.id=='balance-first-duty','pending passage did not open')
 equal(N:IsReaderShown(),true,'reader did not open')
@@ -428,7 +431,7 @@ equal(N:IsReaderShown(),false,'taxi opened the reader')
 UnitOnTaxi=function() return false end
 local cue
 for _,frame in ipairs(createdFrames) do
-	if type(frame.label)=='table' and frame.scripts.OnUpdate and frame.scripts.OnUpdate then cue=frame end
+	if type(frame.icon)=='table' and frame.scripts.OnUpdate then cue=frame end
 end
 assert(cue,'story cue retry missing')
 cue.scripts.OnUpdate(cue,1)
@@ -754,8 +757,8 @@ N:Close()
 -- 15. Ink controls and font preferences keep delivery state independent.
 equal(restored.close.label:GetText(),'×','close symbol missing')
 equal(restored.close.point[1],'TOPRIGHT','close is not in title row')
-equal(restored.earlier.label:GetText(),'‹','earlier arrow missing')
-equal(restored.later.label:GetText(),'›','later arrow missing')
+equal(restored.earlier.label:GetText(),'<','earlier arrow missing')
+equal(restored.later.label:GetText(),'>','later arrow missing')
 local idleInk=restored.close.label.ink[1]
 restored.close.scripts.OnEnter(restored.close)
 check(restored.close.label.ink[1]<idleInk,'hover did not darken ink')

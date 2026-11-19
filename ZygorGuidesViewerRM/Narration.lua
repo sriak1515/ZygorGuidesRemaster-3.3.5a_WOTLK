@@ -490,7 +490,10 @@ end
 local function addButton(parent,label,callback)
 	local button=makeWidget('Button',parent)
 	if not button then return nil end
-	button:SetSize(24,24)
+	button:SetSize(24,20)
+	button:SetBackdrop({bgFile='Interface\\Buttons\\white8x8',edgeFile='Interface\\Buttons\\white8x8',edgeSize=1,insets={left=1,right=1,top=1,bottom=1}})
+	button:SetBackdropColor(210/255,188/255,146/255,1)
+	button:SetBackdropBorderColor(134/255,104/255,60/255,1)
 	local text=button:CreateFontString(nil,'ARTWORK')
 	text:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF',20)
 	text:SetTextColor(90/255,43/255,11/255)
@@ -499,9 +502,9 @@ local function addButton(parent,label,callback)
 	text:SetText(label)
 	button.label=text
 	button:SetScript('OnEnter',function(self)
-		if self:IsEnabled() then text:SetTextColor(44/255,31/255,16/255) end
+		if self:IsEnabled() then self:SetBackdropColor(0.76,0.67,0.50,1); text:SetTextColor(44/255,31/255,16/255) end
 	end)
-	button:SetScript('OnLeave',function() text:SetTextColor(90/255,43/255,11/255) end)
+	button:SetScript('OnLeave',function(self) self:SetBackdropColor(210/255,188/255,146/255,1); text:SetTextColor(90/255,43/255,11/255) end)
 	button:SetScript('OnClick',function() callback() end)
 	return button
 end
@@ -598,13 +601,12 @@ local function ensureUI()
 			cue:SetBackdropColor(210/255,188/255,146/255,1)
 			cue:SetBackdropBorderColor(134/255,104/255,60/255,1)
 		end
-		local label=cue:CreateFontString(nil,'ARTWORK')
-		if not label then error('label') end
-		label:SetFont('Fonts\\FRIZQT__.TTF',12)
-		label:SetTextColor(44/255,31/255,16/255)
-		label:SetPoint('CENTER',cue,'CENTER',0,0)
-		label:SetText('|TInterface\\Icons\\INV_Misc_Book_09:18|t')
-		cue.label=label
+		local icon=cue:CreateTexture(nil,'ARTWORK')
+		icon:SetSize(18,18)
+		icon:SetPoint('CENTER',cue,'CENTER',0,0)
+		icon:SetTexture('Interface\\Icons\\INV_Misc_Book_09')
+		cue.icon=icon
+		cue.label=icon -- Keep the existing offline replay locator.
 		cue:SetScript('OnEnter',function(self)
 			if self:IsEnabled() then self:SetBackdropColor(0.76,0.67,0.50,1) end
 			GameTooltip:SetOwner(self,'ANCHOR_TOP')
@@ -716,18 +718,13 @@ local function ensureUI()
 		scroll:SetScript('OnSizeChanged',updateScrollChild)
 		local close=addButton(reader,'×',function() N:Close() end)
 		close:SetPoint('TOPRIGHT',reader,'TOPRIGHT',-16,-18)
-		local earlier=addButton(reader,'‹',function() N:Cycle(-1) end)
-		local later=addButton(reader,'›',function() N:Cycle(1) end)
+		local earlier=addButton(reader,'<',function() N:Cycle(-1) end)
+		local later=addButton(reader,'>',function() N:Cycle(1) end)
 		earlier:SetPoint('BOTTOMRIGHT',reader,'BOTTOMRIGHT',-66,14)
 		later:SetPoint('BOTTOMRIGHT',reader,'BOTTOMRIGHT',-34,14)
 		local grip=makeWidget('Button',reader)
 		grip:SetSize(18,18)
 		grip:SetPoint('BOTTOMRIGHT',reader,'BOTTOMRIGHT',-3,3)
-		local gripText=grip:CreateFontString(nil,'ARTWORK')
-		gripText:SetFont(STANDARD_TEXT_FONT or 'Fonts\\FRIZQT__.TTF',16)
-		gripText:SetTextColor(86/255,68/255,44/255)
-		gripText:SetPoint('CENTER',grip,'CENTER',0,0)
-		gripText:SetText('/')
 		grip:SetScript('OnMouseDown',function(_,button)
 			if button=='LeftButton' then reader:StartSizing('BOTTOMRIGHT') end
 		end)
@@ -812,7 +809,8 @@ function N:RefreshCue()
 	local cue=widgets.cue
 	cue.delivered,cue.total=delivered,#record.passages
 	if delivered>0 then cue:Enable() else cue:Disable() end
-	cue:SetAlpha(delivered>0 and 1 or 0.4)
+	cue.icon:SetDesaturated(delivered==0)
+	cue:SetAlpha(delivered>0 and 1 or 0.5)
 	cue:Show()
 end
 
@@ -972,6 +970,8 @@ function N:OnCombatEnded()
 	self:RefreshCue()
 	self:MaybeAutoPresent()
 end
+
+function N:HasCurrentGuide() return currentRecord()~=nil end
 
 function N:GetStatus(registration)
 	local record=registration and registry[registration] or currentRecord()
