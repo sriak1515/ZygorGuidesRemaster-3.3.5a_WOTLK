@@ -3241,7 +3241,7 @@ function me:UpdateRemasterHeader()
 			pcall(titleFS.SetText, titleFS, text or "")
 		end
 
-		local maxWidth = math.max(80, (header:GetWidth() or 0) - 70)
+		local maxWidth = math.max(80, (header:GetWidth() or 0) - 140)
 		titleFS:ClearAllPoints()
 		titleFS:SetPoint("CENTER", header, "CENTER", 0, 0)
 		titleFS:SetJustifyH("CENTER")
@@ -3569,14 +3569,14 @@ function me:EnsureRemasterFrames()
 	local title = header:CreateFontString(nil, "ARTWORK")
 	title:SetPoint("LEFT", header, "LEFT", 8, 0)
 	title:SetJustifyH("LEFT")
-	title:SetTextColor(0.92, 0.94, 0.98, 1)
+	title:SetTextColor(90/255, 43/255, 11/255, 1)
 	safeSetFont(title, "Fonts\\MORPHEUS.TTF", 13)
 	frames.headerTitle = title
 
 	local meta = header:CreateFontString(nil, "ARTWORK")
 	meta:SetPoint("RIGHT", header, "RIGHT", -10, 0)
 	meta:SetJustifyH("RIGHT")
-	meta:SetTextColor(0.70, 0.75, 0.85, 1)
+	meta:SetTextColor(86/255, 68/255, 44/255, 1)
 	safeSetFont(meta, "Fonts\\FRIZQT__.TTF", 11)
 	frames.headerMeta = meta
 
@@ -3715,7 +3715,7 @@ function me:EnsureRemasterFrames()
 	local stepLabel = toolbar:CreateFontString(nil, "ARTWORK")
 	stepLabel:SetPoint("LEFT", nextButton, "RIGHT", 8, 0)
 	stepLabel:SetJustifyH("LEFT")
-	stepLabel:SetTextColor(0.78, 0.82, 0.9, 1)
+	stepLabel:SetTextColor(44/255, 31/255, 16/255, 1)
 	safeSetFont(stepLabel, "Fonts\\FRIZQT__.TTF", 11)
 	frames.stepLabel = stepLabel
 
@@ -7041,6 +7041,7 @@ function me:ApplyRemasterSkin(visualOnly)
 		return
 	end
 	local remasterFrames = self:EnsureRemasterFrames()
+	if self.CampaignNarration then self.CampaignNarration:RefreshCue() end
 	if not visualOnly then
 		local compactMetrics = self:GetCompactGuideLayoutMetrics()
 		local compactGuide = self.db
@@ -7235,11 +7236,11 @@ function me:ApplyRemasterSkin(visualOnly)
 			setTexColor(remasterFrames.separator, c[1], c[2], c[3], c[4] or 1)
 		end
 		if remasterFrames.headerTitle then
-			local c = theme.textPrimary or textc
+			local c = {90/255,43/255,11/255,1}
 			remasterFrames.headerTitle:SetTextColor(c[1], c[2], c[3], c[4] or 1)
 		end
 		if remasterFrames.headerMeta then
-			local c = theme.textMeta or textc
+			local c = {86/255,68/255,44/255,1}
 			remasterFrames.headerMeta:SetTextColor(c[1], c[2], c[3], c[4] or 0.85)
 		end
 		if remasterFrames.stepLabel then

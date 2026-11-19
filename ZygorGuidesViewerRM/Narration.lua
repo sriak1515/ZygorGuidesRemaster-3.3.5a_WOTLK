@@ -452,9 +452,7 @@ end
 
 local function makeWidget(kind,parent)
 	if type(CreateFrame)~='function' then return nil end
-	local ok,frame=pcall(CreateFrame,kind,nil,parent or UIParent)
-	if not ok then return nil end
-	return frame
+	return CreateFrame(kind,nil,parent or UIParent)
 end
 
 local function fontPath()
@@ -522,9 +520,21 @@ local function restoreReaderGeometry(reader)
 	local char=ZGV.db and ZGV.db.char
 	local saved=char and char.campaignNarrationReader
 	reader:ClearAllPoints()
-	reader:SetPoint('CENTER',UIParent,'CENTER',0,60)
 	reader:SetSize(520,340)
-	if type(saved)~='table' then return end
+	if type(saved)~='table' then
+		local journey=ZGV.Frame
+		local left,right=journey and journey:GetLeft(),journey and journey:GetRight()
+		local screenLeft,screenRight=UIParent:GetLeft(),UIParent:GetRight()
+		if left and right and screenLeft and screenRight then
+			if screenRight-right>=left-screenLeft then
+				reader:SetPoint('TOPLEFT',journey,'TOPRIGHT',12,0)
+			else
+				reader:SetPoint('TOPRIGHT',journey,'TOPLEFT',-12,0)
+			end
+		else reader:SetPoint('CENTER',UIParent,'CENTER',0,60) end
+		return
+	end
+	reader:SetPoint('CENTER',UIParent,'CENTER',0,60)
 	for _,key in ipairs({'x','y','width','height'}) do
 		local value=saved[key]
 		if type(value)~='number' or value~=value or value==huge or value==-huge then return end
@@ -556,9 +566,21 @@ local function shadeEdges(parent,outside)
 	end
 end
 
+local function anchorCue(cue)
+	local remaster=ZGV.IsRemasterSkin and ZGV:IsRemasterSkin()
+	local frames=ZGV.RemasterFrames
+	local bar=remaster and frames and frames.header or (not remaster and (_G.ZygorGuidesViewerFrame_Border_TitleBar or ZGV.Frame))
+	if not bar then return end
+	cue:SetParent(bar)
+	cue:ClearAllPoints()
+	if remaster and frames.closeButton then
+		cue:SetPoint('RIGHT',frames.closeButton,'LEFT',-6,0)
+	else cue:SetPoint('TOPLEFT',bar,'TOPLEFT',6,-6) end
+end
+
 local function ensureUI()
 	if ui==false then return nil end
-	if type(ui)=='table' then return ui end
+	if type(ui)=='table' then anchorCue(ui.cue); return ui end
 	if type(CreateFrame)~='function' or not UIParent then
 		ui=false
 		return nil
@@ -567,11 +589,10 @@ local function ensureUI()
 	-- UIParent if metadata loads before AceAddon OnInitialize has assigned it.
 	if not ZGV.Frame then return nil end
 	local ok,cue,reader=pcall(function()
-		local bar=_G.ZygorGuidesViewerFrame_Border_TitleBar or ZGV.Frame
-		local cue=makeWidget('Button',bar)
+		local cue=makeWidget('Button',ZGV.Frame)
 		if not cue then error('cue') end
 		cue:SetSize(28,20)
-		cue:SetPoint('TOPLEFT',bar,'TOPLEFT',6,-6)
+		anchorCue(cue)
 		if cue.SetBackdrop then
 			cue:SetBackdrop({bgFile='Interface\\Buttons\\white8x8',edgeFile='Interface\\Buttons\\white8x8',tile=true,tileSize=8,edgeSize=1,insets={left=1,right=1,top=1,bottom=1}})
 			cue:SetBackdropColor(210/255,188/255,146/255,1)
@@ -584,6 +605,18 @@ local function ensureUI()
 		label:SetPoint('CENTER',cue,'CENTER',0,0)
 		label:SetText('|TInterface\\Icons\\INV_Misc_Book_09:18|t')
 		cue.label=label
+		cue:SetScript('OnEnter',function(self)
+			if self:IsEnabled() then self:SetBackdropColor(0.76,0.67,0.50,1) end
+			GameTooltip:SetOwner(self,'ANCHOR_TOP')
+			GameTooltip:SetText('Story')
+			GameTooltip:AddLine((self.delivered or 0)..' / '..(self.total or 0)..' delivered')
+			GameTooltip:Show()
+		end)
+		cue:SetScript('OnLeave',function(self)
+			self:SetBackdropColor(210/255,188/255,146/255,1)
+			GameTooltip:Hide()
+		end)
+		cue:EnableMouse(true)
 		cue:RegisterForClicks('LeftButtonUp')
 		cue:SetScript('OnClick',function(_,button)
 			if type(InCombatLockdown)=='function' and InCombatLockdown() then return end
@@ -717,9 +750,11 @@ local function ensureUI()
 	end)
 	if not ok then
 		ui=false
+		if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage('Story UI error: '..tostring(cue)) end
 		return nil
 	end
 	ui={cue=cue,reader=reader}
+	N.storyButton=cue
 	return ui
 end
 
@@ -765,22 +800,20 @@ function N:RefreshCue()
 	local widgets=ensureUI()
 	if not widgets then return end
 	local record=currentRecord()
-	local state=record and stateFor(record,false)
-	if not record or not state then
+	if not record then
 		widgets.cue:Hide()
 		return
 	end
-	local list=ordered(record,state)
-	if #list==0 then
-		widgets.cue:Hide()
-		return
+	local state=stateFor(record,false)
+	local delivered=0
+	for _,passage in ipairs(record.passages) do
+		if state and state.delivered[passage.id]==passage.revision then delivered=delivered+1 end
 	end
-	local pending=0
-	for _,item in ipairs(list) do
-		if item.status=='pending' then pending=pending+1 end
-	end
-
-	widgets.cue:Show()
+	local cue=widgets.cue
+	cue.delivered,cue.total=delivered,#record.passages
+	if delivered>0 then cue:Enable() else cue:Disable() end
+	cue:SetAlpha(delivered>0 and 1 or 0.4)
+	cue:Show()
 end
 
 function N:CanAutoPresent(entry)

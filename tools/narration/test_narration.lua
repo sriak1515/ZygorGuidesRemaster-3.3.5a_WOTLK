@@ -73,7 +73,9 @@ local function newWidget(kind)
 		if wasShown and self.scripts.OnHide then self.scripts.OnHide(self) end
 	end
 	function widget:IsShown() return self.shown end
-	function widget:IsVisible() return self.shown end
+	function widget:IsVisible() local parent=rawget(self,'parent'); return self.shown and (not parent or parent:IsVisible()) end
+	function widget:SetParent(parent) self.parent=parent end
+	function widget:GetParent() return self.parent end
 	function widget:SetText(value) self.text=value end
 	function widget:GetText() return self.text end
 	function widget:SetScript(event,callback) self.scripts[event]=callback end
@@ -142,8 +144,9 @@ SlashCmdList={}
 STANDARD_TEXT_FONT='Fonts\\FRIZQT__.TTF'
 GameFontNormal={GetFont=function() return STANDARD_TEXT_FONT end}
 local createdFrames={}
-CreateFrame=function(kind)
+CreateFrame=function(kind,name,parent)
 	local frame=newWidget(kind)
+	frame.parent=parent
 	createdFrames[#createdFrames+1]=frame
 	return frame
 end
@@ -159,6 +162,11 @@ ZGV.L=locale
 ZGV.recentlyVisitedCoords={}
 ZGV.Frame=newWidget('Frame')
 ZGV.Frame:Show()
+local remasterRoot=newWidget('Frame'); remasterRoot:SetParent(ZGV.Frame); remasterRoot:Show()
+local remasterHeader=newWidget('Frame'); remasterHeader:SetParent(remasterRoot); remasterHeader:Show()
+local remasterClose=newWidget('Button'); remasterClose:SetParent(remasterHeader); remasterClose:Show()
+ZGV.RemasterFrames={root=remasterRoot,header=remasterHeader,closeButton=remasterClose}
+ZGV.IsRemasterSkin=function() return true end
 local px,py=0.01,0.01
 GetPlayerMapPosition=function() return px,py end
 GetNumQuestLogEntries=function() local n=0 for _ in pairs(ZGV.questsbyid) do n=n+1 end return n end
@@ -250,6 +258,12 @@ check(acceptStep and objectiveStep and rewardStep,'fixture steps missing')
 
 -- Focus does not unlock the focused completion anchor.
 N:OnStepFocused(guide,rewardStep)
+local storyButton=assert(N.storyButton)
+equal(storyButton:GetParent(),remasterHeader,'story parent')
+check(storyButton:IsVisible(),'story parent chain is hidden')
+check(not storyButton:IsEnabled(),'story enabled before delivery')
+equal(storyButton:GetAlpha(),0.4,'story disabled alpha')
+equal(storyButton.total,2,'story total')
 equal(status().pending,0,'manual jump ahead revealed future narration')
 equal(status().anchors,0,'jump delivered narration')
 ZGV.db.char.campaignNarration=nil
@@ -274,6 +288,8 @@ equal(N:IsReaderShown(),false,'cue mode unexpectedly opened the reader')
 -- 3. Once-only presentation and reopening through history without a Mark read
 -- click. Opening is the presentation event.
 local first=N:OpenLatest()
+check(storyButton:IsEnabled(),'story disabled after delivery')
+equal(storyButton.delivered,1,'story delivered count')
 check(first and first.id=='balance-first-duty','pending passage did not open')
 equal(N:IsReaderShown(),true,'reader did not open')
 local initialReader
@@ -428,6 +444,7 @@ ZGV.CurrentGuide={title='Ordinary Native Guide',steps={}}
 N:OnStepFocused(ZGV.CurrentGuide,{goals={}})
 equal(N:IsReaderShown(),false,'guide switch left the old reader visible')
 N:RefreshCue()
+check(not N.storyButton:IsShown(),'story shown for guide without narration')
 local afterSwitch=N:GetStatus('WoW Solo Adventure V1\\EXAMPLE-KAL-01-BALANCE-ONE')
 equal(afterSwitch.pending,beforeSwitch.pending,'guide switch mutated pending state')
 equal(afterSwitch.delivered,beforeSwitch.delivered,'guide switch mutated delivered state')
