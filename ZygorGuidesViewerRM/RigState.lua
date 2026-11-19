@@ -40,6 +40,7 @@ function ZygorRigState()
  end
  return {screen_height=GetScreenHeight()*UIParent:GetEffectiveScale(),guide_id=record and record.guide_id or (guide and guide.title),guide_title=guide and guide.title,
   step_count=guide and guide.steps and #guide.steps or 0,step_index=z.CurrentStepNum,
+  step_indicator=z.RemasterFrames and z.RemasterFrames.stepLabel and z.RemasterFrames.stepLabel:GetText(),
   step_id=position or (step and step.label),saved_step_id=progress and progress.source_step_id,
   journey_done_transient=not not manual,goals=goals,unlocked_passage_ids=passages,
   shown_passage_id=entry and entry.id,panels={journey=panel(ZygorGuidesViewerFrame,overflow(ZygorGuidesViewerFrame)),
