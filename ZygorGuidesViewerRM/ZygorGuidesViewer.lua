@@ -5301,6 +5301,17 @@ function me:UpdateFrame(full,onupdate,nonsecure_only)
 							end
 						end
 
+						local wayfinding = self.CampaignWayfinder and self.CampaignWayfinder:Get(self.CurrentGuide,stepdata)
+						if wayfinding and wayfinding.hint and line<=maxlines and frame.lines[line] then
+							frame.lines[line].labelOffsetX = ZGV.ICON_INDENT
+							frame.lines[line].labelOffsetY = 2
+							self:ApplyGuideLineLabelLayout(frame.lines[line])
+							frame.lines[line].label:SetFont(self:IsRemasterSkin() and "Fonts\\FRIZQT__.TTF" or FONT,round(self.db.profile.fontsecsize))
+							frame.lines[line].label:SetText((self:IsRemasterSkin() and "|cff56442c" or "|cffeeeecc")..wayfinding.hint.."|r")
+							frame.lines[line].goal = nil
+							line=line+1
+						end
+
 						--[[ -- no more
 						-- info line
 						if stepdata.info then
