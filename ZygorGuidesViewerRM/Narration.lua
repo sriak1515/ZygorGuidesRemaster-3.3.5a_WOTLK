@@ -621,7 +621,6 @@ local function ensureUI()
 		cue:EnableMouse(true)
 		cue:RegisterForClicks('LeftButtonUp')
 		cue:SetScript('OnClick',function(_,button)
-			if type(InCombatLockdown)=='function' and InCombatLockdown() then return end
 			if N:IsReaderShown() then N:Close() else N:OpenLatest() end
 		end)
 		local elapsed=0

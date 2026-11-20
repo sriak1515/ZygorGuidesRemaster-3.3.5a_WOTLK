@@ -310,6 +310,18 @@ check(reopened and reopened.id==first.id,'presented passage was not reusable')
 equal(status().delivered,1,'reopening duplicated delivery state')
 N:Close()
 
+-- Manual controls remain available in combat, independently of auto-open.
+InCombatLockdown=function() return true end
+storyButton.scripts.OnClick(storyButton,'LeftButton')
+equal(N:IsReaderShown(),true,'combat click did not open story')
+storyButton.scripts.OnClick(storyButton,'LeftButton')
+equal(N:IsReaderShown(),false,'combat click did not close story')
+SlashCmdList.WSAFRAME('40')
+equal(N:IsReaderShown(),true,'combat slash command did not open reader')
+initialReader.close.scripts.OnClick(initialReader.close,'LeftButton')
+equal(N:IsReaderShown(),false,'combat close control did not close reader')
+InCombatLockdown=function() return false end
+
 -- 4. Reveal conditions are tri-state. UNKNOWN must not reveal, and a later real
 -- client observation can make the same retained anchor eligible.
 equal(N:Evaluate({quest_rewarded=456}),nil,'unobserved reward was treated as known')
