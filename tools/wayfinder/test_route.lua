@@ -7,6 +7,10 @@ ZygorGuidesViewer={startups={},RegisterCampaignGuideMetadata=function() return t
 dofile('ZygorGuidesViewerRM/Wayfinder.lua')
 dofile('ZygorGuidesViewerRM/CampaignRoute.lua')
 local W,R=ZygorGuidesViewer.CampaignWayfinder,ZygorGuidesViewer.CampaignRoute
+GetScreenResolutions=function() return '1920x1080' end
+GetCurrentResolution=function() return 1 end
+local scaleFrame={GetEffectiveScale=function() return 0.8 end}
+assert(math.abs(R.PixelScale(scaleFrame)-1.125)<0.00001)
 local hits={}
 local function capture(x,y,segment) hits[#hits+1]={x=x,y=y,segment=segment} end
 local route={{x=0,y=0,sx=0,sy=0},{x=10,y=0,sx=10,sy=0},{x=10,y=10,sx=10,sy=10}}
@@ -35,13 +39,15 @@ local function newFrame()
  created=created+1
  local f={shown=false,level=1}
  function f:SetSize() end
+ function f:SetAlpha() end
+ function f:GetEffectiveScale() return 768/1080 end
  function f:SetFrameStrata() end
  function f:SetFrameLevel() end
  function f:GetFrameLevel() return self.level end
  function f:IsShown() return self.shown end
  function f:Show() self.shown=true end
  function f:Hide() self.shown=false end
- function f:CreateTexture() return {SetAllPoints=function() end,SetTexture=function() end,SetVertexColor=function() end,SetAlpha=function() end} end
+ function f:CreateTexture() return {SetAllPoints=function() end,SetPoint=function() end,SetSize=function() end,SetTexture=function() end,SetVertexColor=function() end,SetAlpha=function() end} end
  return f
 end
 CreateFrame=function() return newFrame() end
@@ -57,6 +63,15 @@ W.guides.g.a.waypoints={{map='m',x=55,y=50}}
 W.step,W.index=step,1
 R:Update(); assert(#R.mini>0 and #R.world>0)
 local before=created; R:Update(); assert(created==before)
+-- At a different inherited scale, the spacing remains eight physical pixels.
+local positions={}
+function astro:PlaceIconOnWorldMap(_,_,_,_,x,y) positions[#positions+1]=x; return x,y end
+function overlay:GetEffectiveScale() return 0.5*768/1080 end
+R:Update()
+assert(#positions>1 and math.abs((positions[2]-positions[1])*overlay:GetWidth()*R.worldScale-8)<0.00001)
+-- A passed waypoint is omitted from the path.
+W.guides.g.a.waypoints={{map='m',x=45,y=50},{map='m',x=55,y=50}}
+W.index=2; R:Update(); assert(R.path[2].x==.55)
 ZygorGuidesViewer.db.profile.campaignrouteline=false; R:Update()
 assert(not R.mini[1]:IsShown() and not R.world[1]:IsShown())
 print('campaign route pooling and visibility tests passed')
