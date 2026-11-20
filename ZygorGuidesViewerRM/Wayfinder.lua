@@ -73,7 +73,7 @@ function W:Update()
  if not data or #data.waypoints==0 or not A or not ZGV.Pointer then return end
  local c,z,x,y=A:GetCurrentPlayerPosition()
  if not c or not z or not x or not y then return end
- local points={}
+ local points=self.points or {}; self.points=points
  for i,p in ipairs(data.waypoints) do
   local mc,mz=ZGV:GetMapZoneNumbers(p.map)
   if mc~=c or mz~=z then
@@ -82,10 +82,15 @@ function W:Update()
   end
   local dist,dx,dy=A:ComputeDistance(c,z,x,y,mc,mz,p.x/100,p.y/100)
   if not dist or not dx or not dy then return end
-  points[i]={x=dx,y=dy}
+  local point=points[i] or {}; points[i]=point; point.x=dx; point.y=dy
  end
+ for i=#data.waypoints+1,#points do points[i]=nil end
  local index,target=self.Select(points,self.index)
  self.index=index
+ if not ZGV.db.profile.campaignwaypointarrow then
+  if self.marker then ZGV.Pointer:RemoveWaypoint(self.marker); self.marker=nil; self.target=nil; ZGV:SetWaypoint() end
+  return
+ end
  if target~=self.target or (target and (not self.marker or not ZGV.Pointer.waypoints[self.marker])) then
   if self.marker and ZGV.Pointer.waypoints[self.marker] then ZGV.Pointer:RemoveWaypoint(self.marker) end
   self.marker=nil; self.target=target

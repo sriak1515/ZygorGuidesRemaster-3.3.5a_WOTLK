@@ -88,6 +88,8 @@ function me:Options_RegisterDefaults()
 			fontsize = 11,
 			fontsecsize = 9,
 			disablerouteloopstacking = false,
+			campaignrouteline = true,
+			campaignwaypointarrow = false,
 			routeantminimapmode = "local",
 			routeantdensity = 100,
 
@@ -1642,6 +1644,13 @@ function me:Options_DefineOptions()
 						set = function(i,v) Setter_Simple(i,v)  self.Pointer:MinimapZoomChanged() end,
 						width = "full",
 						order = 10.24,
+					},
+					campaignrouteline = {
+						name = 'Show campaign route line', type = 'toggle', width = 'full', order = 10.243,
+					},
+					campaignwaypointarrow = {
+						name = 'Follow campaign waypoints with arrow',
+						type = 'toggle', width = 'full', order = 10.244,
 					},
 					routeantminimapmode = {
 						name = L["opt_routeantminimapmode"],
