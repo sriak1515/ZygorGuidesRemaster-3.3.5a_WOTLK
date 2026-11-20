@@ -5,6 +5,19 @@ local R = { mini={}, world={}, path={} }
 ZGV.CampaignRoute = R
 local A = DongleStub and (({pcall(DongleStub,'Astrolabe-0.4-Zygor')})[2] or ({pcall(DongleStub,'Astrolabe-0.4')})[2])
 local sqrt, floor = math.sqrt, math.floor
+local look = {
+ miniSize=4, miniSpacing=9, miniGap=12,
+ worldZoneSize=4, worldLargeSize=3, worldSpacing=8, worldGap=10,
+ rimRadius=1, fill={0.78,0.58,0.26}, rim={0.20,0.12,0.06},
+ texture='Interface\\AddOns\\ZygorGuidesViewerRM\\Textures\\CampaignRouteDot',
+}
+
+-- UI units to physical pixels, including the frame's inherited scale.
+function R.PixelScale(frame)
+ local resolutions={GetScreenResolutions()}
+ local height=tonumber((resolutions[GetCurrentResolution()] or ''):match('%u?%d+%s*[xX]%s*(%d+)')) or 768
+ return frame:GetEffectiveScale()*height/768
+end
 
 -- Each point has map x/y and screen x/y. Spacing carries across bends.
 function R.Strokes(points, count, spacing, radius, goalGap, emit)
@@ -41,15 +54,19 @@ local function point(path,i,x,y,sx,sy)
  p.x,p.y,p.sx,p.sy=x,y,sx,sy
 end
 
-local function frame(pool,i,parent,size)
+local function frame(pool,i,parent,size,scale)
  local f=pool[i]
  if not f then
-  f=CreateFrame('Frame',nil,parent); f:SetSize(size,size)
+  f=CreateFrame('Frame',nil,parent)
   f:SetFrameStrata('HIGH'); f:SetFrameLevel(parent:GetFrameLevel()+5)
-  f.icon=f:CreateTexture(nil,'OVERLAY'); f.icon:SetAllPoints()
-  f.icon:SetTexture('Interface\\Buttons\\WHITE8X8')
-  f.icon:SetVertexColor(0.85,0.70,0.42,1); f:Hide(); pool[i]=f
+  f.rim=f:CreateTexture(nil,'ARTWORK'); f.rim:SetAllPoints()
+  f.rim:SetTexture(look.texture); f.rim:SetVertexColor(unpack(look.rim))
+  f.icon=f:CreateTexture(nil,'OVERLAY'); f.icon:SetPoint('CENTER')
+  f.icon:SetTexture(look.texture); f.icon:SetVertexColor(unpack(look.fill))
+  f:Hide(); pool[i]=f
  end
+ f:SetSize((size+2*look.rimRadius)/scale,(size+2*look.rimRadius)/scale)
+ f.icon:SetSize(size/scale,size/scale)
  return f
 end
 
@@ -66,14 +83,14 @@ end
 -- Reused callbacks avoid creating a new closure on every redraw.
 local function miniDot(x,y,segment)
  local r=R; r.used=r.used+1
- local f=frame(r.mini,r.used,Minimap,5)
- f.icon:SetAlpha(segment==1 and 0.85 or 0.34)
+ local f=frame(r.mini,r.used,Minimap,look.miniSize,r.miniScale)
+ f:SetAlpha(segment==1 and 0.85 or 0.34)
  A:PlaceIconOnMinimap(f,r.c,r.z,x,y)
 end
 local function worldDot(x,y,segment)
  local r=R; r.used=r.used+1
- local f=frame(r.world,r.used,r.overlay,4)
- f.icon:SetAlpha(segment==1 and 0.85 or 0.34)
+ local f=frame(r.world,r.used,r.overlay,r.worldSize,r.worldScale)
+ f:SetAlpha(segment==1 and 0.85 or 0.34)
  local wx,wy=A:PlaceIconOnWorldMap(r.overlay,f,r.c,r.z,x,y)
  if wx and wy and wx>=0 and wx<=1 and wy>=0 and wy<=1 then f:Show() else f:Hide() end
 end
@@ -109,15 +126,18 @@ function R:Update()
    if not dist then self:Hide(self.mini,1,true); self:Hide(self.world,1,false); return end
    p.sx,p.sy=dx*scale,dy*scale
   end
-  self.used=0; self.Strokes(self.path,count,9,Minimap:GetWidth()/2-4,12,miniDot)
+  self.miniScale=self.PixelScale(Minimap)
+  self.used=0; self.Strokes(self.path,count,look.miniSpacing/self.miniScale,Minimap:GetWidth()/2-(look.miniSize/2+look.rimRadius)/self.miniScale,look.miniGap/self.miniScale,miniDot)
   self:Hide(self.mini,self.used+1,true)
  else self:Hide(self.mini,1,true) end
  local overlay=ZGV.Pointer.OverlayFrame
  local wc,wz=GetCurrentMapContinentAndZone()
  if overlay and overlay:IsShown() and wc==c and wz==z then
   self.overlay=overlay
+  self.worldScale=self.PixelScale(overlay)
+  self.worldSize=(wz==0) and look.worldLargeSize or look.worldZoneSize
   for i=1,count do local p=self.path[i]; p.sx,p.sy=p.x*overlay:GetWidth(),p.y*overlay:GetHeight() end
-  self.used=0; self.Strokes(self.path,count,7,nil,10,worldDot)
+  self.used=0; self.Strokes(self.path,count,look.worldSpacing/self.worldScale,nil,look.worldGap/self.worldScale,worldDot)
   self:Hide(self.world,self.used+1,false)
  else self:Hide(self.world,1,false) end
 end
