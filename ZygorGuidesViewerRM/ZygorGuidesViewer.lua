@@ -3379,6 +3379,8 @@ function me:UpdateRemasterHeader()
 	local title = ""
 	if self.loading then
 		title = "Loading Guides"
+	elseif self.CurrentGuide and self.CampaignDisplayTitles and self.CampaignDisplayTitles[self.CurrentGuide.title] then
+		title = self.CampaignDisplayTitles[self.CurrentGuide.title]
 	elseif self.CurrentGuide and self.CurrentGuide.title_short then
 		title = self.CurrentGuide.title_short
 	elseif self.CurrentGuide and self.CurrentGuide.title then
@@ -5093,7 +5095,7 @@ function me:UpdateFrame(full,onupdate,nonsecure_only)
 			if full then
 				ZygorGuidesViewerFrameScrollScrollBar:SetMinMaxValues(1,#self.CurrentGuide.steps>0 and #self.CurrentGuide.steps or 1)
 				ZygorGuidesViewerFrame_Skipper_Step:SetText(self.CurrentStepNum)
-				self:UpdateLegacyHeaderTitle(self.CurrentGuide.title_short)
+				self:UpdateLegacyHeaderTitle((self.CampaignDisplayTitles and self.CampaignDisplayTitles[self.CurrentGuide.title]) or self.CurrentGuide.title_short)
 			end
 
 			--ZygorGuidesViewerFrame_Border_TitleBar_PrevButton:Show()
