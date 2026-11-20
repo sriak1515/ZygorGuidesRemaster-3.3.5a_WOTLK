@@ -380,10 +380,11 @@ local function UpdateGuideBrowser(self)
 		local data = guides[i + rightOff]
 		if data then
 			row.data = data
+			local label = (self.CampaignDisplayTitles and self.CampaignDisplayTitles[data.title]) or data.label
 			if data.title == f.selectedGuide then
-				row.text:SetText("|cffdfe3eb" .. data.label .. "|r")
+				row.text:SetText("|cffdfe3eb" .. label .. "|r")
 			else
-				row.text:SetText(data.label)
+				row.text:SetText(label)
 			end
 			row:Show()
 		else
@@ -453,6 +454,19 @@ function me:OpenGuideBrowser()
 		if self.db and self.db.profile then
 			self.db.profile.guidebrowserpath = PathToString(f.path)
 			self.db.profile.guidebrowsersearch = f.search:GetText() or ""
+		end
+	end)
+	f:SetScript("OnUpdate", function(_, elapsed)
+		f.titleRefreshElapsed = (f.titleRefreshElapsed or 0) + elapsed
+		if f.titleRefreshElapsed < 0.4 then return end
+		f.titleRefreshElapsed = 0
+		for _, row in ipairs(f.rightButtons) do
+			local data = row.data
+			if data then
+				local label = (self.CampaignDisplayTitles and self.CampaignDisplayTitles[data.title]) or data.label
+				if data.title == f.selectedGuide then label = "|cffdfe3eb" .. label .. "|r" end
+				if row.text:GetText() ~= label then row.text:SetText(label) end
+			end
 		end
 	end)
 
@@ -690,7 +704,7 @@ function me:RefreshGuideManagerPanel(panel)
 				text = data.label
 				ApplyActionRowStyle(row)
 			else
-				text = data.label or ""
+				text = (self.CampaignDisplayTitles and self.CampaignDisplayTitles[data.title]) or data.label or ""
 				row.icon:SetTexCoord(unpack(GUIDE_SMALL_ICON_COORDS.guide))
 				local isFav = data.title and self:IsGuideFavorite(data.title) or false
 				local isSelected = (f.selectedGuideTitle and data.title == f.selectedGuideTitle)
@@ -5406,7 +5420,7 @@ local function EnsureGuideManagerStandaloneFrame(self)
 				end
 			end
 		end
-		frame.detailTitle:SetText(guide.title_short or guide.title or sel)
+		frame.detailTitle:SetText((self.CampaignDisplayTitles and self.CampaignDisplayTitles[guide.title]) or guide.title_short or guide.title or sel)
 		local detailMeta = LT("gb_detail_meta_format", steps, author, nextg)
 		if guide.headerdata then
 			detailMeta = detailMeta .. "\n|cff00ccffSource: Retail WOTLK Guide|r"
@@ -6013,6 +6027,13 @@ local function EnsureGuideManagerStandaloneFrame(self)
 		if frame._detailRefreshElapsed < 0.4 then return end
 		frame._detailRefreshElapsed = 0
 		if frame:IsShown() then
+			for _, row in ipairs(treePanel.rows or {}) do
+				local data = row.data
+				if data and data.kind == "guide" then
+					local label = (self.CampaignDisplayTitles and self.CampaignDisplayTitles[data.title]) or data.label or ""
+					if row.text:GetText() ~= label then row.text:SetText(label) end
+				end
+			end
 			UpdateDetails()
 		end
 	end)
