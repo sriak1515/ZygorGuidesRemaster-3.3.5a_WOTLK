@@ -4425,6 +4425,7 @@ function me:FocusStep(num,quiet)
 	end
 	self.CurrentStep = self.CurrentGuide["steps"][num]
 
+	if self.CampaignRoute then self.CampaignRoute:OnFocus(self.CurrentStep) end
 	if self.CampaignNarration then
 		local ok,err=pcall(self.CampaignNarration.OnStepFocused,self.CampaignNarration,self.CurrentGuide,self.CurrentStep)
 		if not ok and self.CampaignNarration.ReportHookFailure then
@@ -4604,6 +4605,7 @@ function me:TryToCompleteStep(force)
 
 	local stepcomplete,steppossible,stepmanual = self.CurrentStep:IsComplete()
 
+	if self.CampaignRoute then self.CampaignRoute:OnCompletion(self.CurrentGuide,self.CurrentStep,stepcomplete) end
 	if self.CampaignNarration then
 		local ok,err=pcall(self.CampaignNarration.OnStepCompleted,self.CampaignNarration,self.CurrentGuide,self.CurrentStep,stepcomplete)
 		if not ok and self.CampaignNarration.ReportHookFailure then
