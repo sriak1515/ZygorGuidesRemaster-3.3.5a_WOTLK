@@ -1191,6 +1191,8 @@ function Pointer:GetFarText(waypoint)
 end
 
 function Pointer:GetDistTxt(dist, waypoint)
+	-- Invalid map geometry can produce distances far beyond any world map.
+	if type(dist)=="number" and dist > 100000 and dist < 9999999 then return nil end
 	if not dist or dist=="far" or ((tonumber(dist or 0) or 0)>9999998) then
 		return self:GetFarText(waypoint)
 	elseif type(dist)=="string" then
